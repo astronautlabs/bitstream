@@ -4,9 +4,11 @@
   "description": "Utilities for packing/unpacking fields of a bitstream",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "private": false,
   "scripts": {
     "build": "tsc -p .",
-    "test": "npm run build && node dist/test"
+    "test": "npm run build && node dist/test",
+    "prepublishOnly": "npm test"
   },
   "repository": {
     "url": "git@github.com:astronautlabs/bitstream.git"
