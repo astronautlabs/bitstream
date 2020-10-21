@@ -24,6 +24,36 @@ reader.readSync(4) // == 0b0001
 reader.readSync(7) // == 0b0001111
 ```
 
+### Async Reading
+
+When using `readSync()`, there must be enough bytes available to the reader (via `addBuffer()`) to read the desired 
+number of bits. If this is not the case, `readSync()` throws an error. You can check how many bits are available using 
+the `available()` method:
+
+```typescript
+if (reader.available(10)) {
+    // 10 bits are available
+}
+```
+
+You can also use `.read()` to receive a promise which will resolve once the value becomes available. Only one outstanding
+`read()` operation is allowed at a time. You can use this to implement pseudo-blocking similar to what's found in other
+languages (though there will be a performance penalty compared to guaranteed synchronous reads)
+
+```typescript
+let value1 = await reader.read(3);
+let value2 = await reader.read(10);
+```
+
+Alternatively, you can use `.assure()` to wait until the desired number of bits are available. Again, there can only be 
+one pending call to `read()` or `assure()` at a time.
+
+```typescript
+await reader.assure(13);
+let value1 = reader.readSync(3);
+let value2 = reader.readSync(10);
+```
+
 ## Writing a bitstream
 
 ```typescript
@@ -71,7 +101,7 @@ let element = MyElement.deserializeSync(bitstreamReader);
 Serialize using:
 
 ```typescript
-element.serializeTo(bitstreamReader);
+element.serializeTo(bitstreamWriter);
 ```
 
 ### Options

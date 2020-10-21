@@ -3,12 +3,13 @@ import { Transform } from "stream";
 export interface BitstreamRequest {
     resolve : (buffer : number) => void;
     length : number;
+    peek : boolean;
 }
 
 export class BitstreamReader {
     private buffers : Buffer[] = [];
     private bufferedLength : number = 0;
-    private blockedRequests : BitstreamRequest[] = [];
+    private blockedRequest : BitstreamRequest = null;
     private offset = 0;
 
     available(length : number) {
@@ -16,6 +17,9 @@ export class BitstreamReader {
     }
 
     readSync(length : number) {
+        if (this.blockedRequest)
+            throw new Error(`Only one read() can be outstanding at a time.`);
+        
         let value = 0;
         let remainingLength = length;
 
@@ -46,13 +50,30 @@ export class BitstreamReader {
         return value;
     }
 
+    assure(length : number) : Promise<void> {
+        if (this.blockedRequest)
+            throw new Error(`Only one read()/assure() can be outstanding at a time.`);
+
+        if (this.bufferedLength >= length) {
+            return Promise.resolve();
+        }
+
+        let request : BitstreamRequest = { resolve: null, length, peek: true };
+        let promise = new Promise<number>(resolve => request.resolve = resolve);
+        this.blockedRequest = request;
+        return promise.then(() => {});
+    }
+
     read(length : number) : Promise<number> {
+        if (this.blockedRequest)
+            throw new Error(`Only one read()/assure() can be outstanding at a time.`);
+        
         if (this.bufferedLength >= length) {
             return Promise.resolve(this.readSync(length));
         } else {
-            let request : BitstreamRequest = { resolve: null, length };
+            let request : BitstreamRequest = { resolve: null, length, peek: false };
             let promise = new Promise<number>(resolve => request.resolve = resolve);
-            this.blockedRequests.push(request);
+            this.blockedRequest = request;
             return promise;
         }
     }
@@ -64,5 +85,14 @@ export class BitstreamReader {
     addBuffer(buffer : Buffer) {
         this.buffers.push(buffer);
         this.bufferedLength += buffer.length * 8;
+
+        if (this.blockedRequest && this.blockedRequest.length <= this.bufferedLength) {
+            this.blockedRequest = null;
+            if (this.blockedRequest.peek) {
+                this.blockedRequest.resolve(0);
+            } else {
+                return this.readSync(this.blockedRequest.length);
+            }
+        }
     }
 }
