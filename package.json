@@ -1,0 +1,26 @@
+{
+  "name": "@astronautlabs/bitstream",
+  "version": "0.0.1",
+  "description": "Utilities for packing/unpacking fields of a bitstream",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "npm run build && node dist/test"
+  },
+  "repository": {
+    "url": "git@github.com:astronautlabs/bitstream.git"
+  },
+  "bugs": {
+    "url": "https://github.com/astronautlabs/bitstream/issues"
+  },
+  "author": "Astronaut Labs",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chai": "^4.2.14",
+    "@types/node": "^14.0.4",
+    "@types/reflect-metadata": "^0.1.0",
+    "chai": "^4.2.0",
+    "razmin": "^0.6.20"
+  }
+}
