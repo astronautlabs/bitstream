@@ -1,4 +1,7 @@
-# @/bitstream ![npm](https://img.shields.io/npm/v/@astronautlabs/bitstream)
+# @/bitstream 
+
+[![npm](https://img.shields.io/npm/v/@astronautlabs/bitstream)](https://npmjs.com/package/@astronautlabs/bitstream)
+[![CircleCI](https://circleci.com/gh/astronautlabs/bitstream.svg?style=svg)](https://circleci.com/gh/astronautlabs/bitstream)
 
 Typescript utility library for reading and writing to "bitstreams", that is, tightly packed binary streams containing fields 
 of varying lengths of bits. This package lets you treat a series of bytes as a series of bits without needing to manage
