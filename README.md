@@ -66,6 +66,10 @@ writer.write(10, 0b1010101010);
 writer.write(length, value);
 ```
 
+`writableStream` is an object which has a `write(buffer)` method (such as a Node.js `Writable` from the `stream` builtin package).
+The `bufferLength` parameter determines how many bytes will be buffered before the buffer will be flushed out to the 
+passed writable stream. This parameter is optional, the default is `1` (one byte per buffer).
+
 Note that any bits in `value` above the `length`'th bit will be ignored, so the following are all equivalent:
 
 ```typescript
