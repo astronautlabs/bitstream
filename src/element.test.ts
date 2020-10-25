@@ -257,7 +257,6 @@ describe('BitstreamElement', it => {
                 @Field(8) afterwards;
             }
         } catch (e) {
-            console.log(e.message);
             caught = e;
         }
 
