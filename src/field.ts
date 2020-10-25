@@ -23,6 +23,19 @@ function booleanDeserializer(reader : BitstreamReader, field : BitstreamSyntaxEl
     return numberDeserializer(reader, field, instance) !== 0;
 }
 
+function arrayDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    let count = reader.readSync(field.options.array.countFieldLength);
+    let elements = [];
+
+    for (let i = 0; i < count; ++i) {
+        let element : BitstreamElement = new (field.options.array.elementType as any)();
+        element.deserializeFrom(reader);
+        elements.push(element);
+    }
+
+    return elements;
+}
+
 function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
     let buffer = Buffer.alloc(resolveLength(field.length, instance, field) / 8);
     for (let i = 0, max = buffer.length; i < max; ++i)
@@ -34,7 +47,7 @@ function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxEle
     return reader.readStringSync(resolveLength(field.length, instance, field), field.options.stringEncoding);
 }
 
-function structureSerializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
+function structureDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
     let element : BitstreamElement = new (field.type as any)();
     element.deserializeFrom(reader);
     return element;
@@ -64,6 +77,15 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
         if (field.type === Buffer && typeof field.length === 'number' && field.length % 8 !== 0)
             throw new Error(`${containingType.name}#${field.name}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
 
+        if (field.type === Array) {
+            if (!field.options.array?.elementType)
+                throw new Error(`${containingType.name}#${field.name}: Array field must specify option array.elementType`);
+            if (!(field.options.array?.elementType.prototype instanceof BitstreamElement))
+                throw new Error(`${containingType.name}#${field.name}: Array fields can only be used with types which inherit from BitstreamElement`);
+            if (typeof field.options.array?.countFieldLength !== 'number' || field.options.array?.countFieldLength <= 0)
+                throw new Error(`${containingType.name}#${field.name}: Invalid value provided for length of count field: ${field.options.array?.countFieldLength}`);
+        }
+
         if (!options.deserializer) {
             if (field.type === Object)
                 options.deserializer = numberDeserializer;
@@ -76,7 +98,9 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
             else if (field.type === String)
                 options.deserializer = stringDeserializer;
             else if (field.type.prototype instanceof BitstreamElement)
-                options.deserializer = structureSerializer;
+                options.deserializer = structureDeserializer;
+            else if (field.type === Array)
+                options.deserializer = arrayDeserializer;
             else
                 throw new Error(`No deserializer available for field ${field.name} with type ${field.type.name}`);
         }

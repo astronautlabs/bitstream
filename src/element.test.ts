@@ -176,7 +176,7 @@ describe('BitstreamElement', it => {
         expect(element.afterwards).to.equal(123);
     });
     
-    it('discriminants should throw when result is undefined', () => {
+    it('should throw when result of a length discriminant is undefined', () => {
         
         let caught;
         class CustomElement extends BitstreamElement {
@@ -193,6 +193,71 @@ describe('BitstreamElement', it => {
         try {
             CustomElement.deserializeSync(bitstream);
         } catch (e) {
+            caught = e;
+        }
+
+        expect(caught).to.exist;
+    });
+    it('should throw when result of a length discriminant is not a number', () => {
+        
+        let caught;
+        class CustomElement extends BitstreamElement {
+            @Field(8) charCount;
+            @Field(i => <any>'foo') str : string;
+            @Field(8) afterwards;
+        }
+
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 5 ]));
+        bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        try {
+            CustomElement.deserializeSync(bitstream);
+        } catch (e) {
+            caught = e;
+        }
+
+        expect(caught).to.exist;
+    });
+    it('should understand arrays', () => {
+        class ItemElement extends BitstreamElement {
+            @Field(8) a;
+            @Field(8) b;
+        }
+        class CustomElement extends BitstreamElement {
+            @Field(8) before;
+            @Field(0, { array: { elementType: ItemElement, countFieldLength: 8 } }) items : ItemElement[];
+            @Field(8) afterwards;
+        }
+
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 123, 3, 1, 2, 11, 12, 21, 22, 123 ]));
+
+        let element = CustomElement.deserializeSync(bitstream);
+
+        expect(element.before).to.equal(123);
+        expect(element.items.length).to.equal(3);
+        
+        expect(element.items[0].a).to.equal(1);
+        expect(element.items[0].b).to.equal(2);
+        expect(element.items[1].a).to.equal(11);
+        expect(element.items[1].b).to.equal(12);
+        expect(element.items[2].a).to.equal(21);
+        expect(element.items[2].b).to.equal(22);
+        expect(element.afterwards).to.equal(123);
+    });
+    it('should throw when array is used without specifying elementType', () => {
+        
+        let caught;
+        try {
+            class CustomElement extends BitstreamElement {
+                @Field(8) before;
+                @Field(0, { array: { countFieldLength: 8 } }) items : any[];
+                @Field(8) afterwards;
+            }
+        } catch (e) {
+            console.log(e.message);
             caught = e;
         }
 

@@ -3,6 +3,13 @@ import { describe } from "razmin";
 import { BitstreamReader } from "./reader";
 
 describe('BitstreamReader', it => {
+    it('can read a byte-aligned byte', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        expect(bitstream.readSync(8)).to.equal(123);
+    });
+
     it('can correctly deserialize a simple example from a single buffer', () => {
         let bitstream = new BitstreamReader();
 

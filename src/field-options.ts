@@ -1,3 +1,4 @@
+import { ArrayOptions } from "./array-options";
 import { BitstreamReader } from "./reader";
 import { StringEncodingOptions } from "./string-encoding-options";
 import { BitstreamSyntaxElement } from "./syntax-element";
@@ -6,7 +7,7 @@ export type Deserializer = (reader : BitstreamReader, field : BitstreamSyntaxEle
 
 export interface FieldOptions {
     deserializer? : Deserializer;
-    elementType? : Function;
     stringEncoding? : StringEncodingOptions;
+    array? : ArrayOptions;
     group? : string;
 }
