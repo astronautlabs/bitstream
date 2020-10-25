@@ -35,4 +35,24 @@ describe('BitstreamReader', it => {
         let str = bitstream.readStringSync(5);
         expect(str).to.equal('hello');
     });
+
+    it('can read null-terminated fixed length UTF-8 strings', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(5, 0);
+        Buffer.from('hi', 'utf-8').copy(buf);
+
+        bitstream.addBuffer(buf);
+        let str = bitstream.readStringSync(5);
+        expect(str).to.equal('hi');
+    });
+
+    it('respects nullTerminated=false when reading strings', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(5, 0);
+        Buffer.from('hi', 'utf-8').copy(buf);
+
+        bitstream.addBuffer(buf);
+        let str = bitstream.readStringSync(5, { nullTerminated: false });
+        expect(str).to.equal('hi\u0000\u0000\u0000');
+    });
 });

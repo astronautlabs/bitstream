@@ -1,4 +1,5 @@
 import { Transform } from "stream";
+import { StringEncodingOptions } from "./string-encoding-options";
 
 export interface BitstreamRequest {
     resolve : (buffer : number) => void;
@@ -25,15 +26,27 @@ export class BitstreamReader {
             throw new Error(`Only one read() can be outstanding at a time.`);
     }
 
-    readStringSync(length : number, encoding = 'utf-8'): string {
+    readStringSync(length : number, options? : StringEncodingOptions): string {
+        if (!options)
+            options = {};
+        
         this.ensureNoReadPending();
 
         let buffer = Buffer.alloc(length);
+        let firstNullByte = -1;
         for (let i = 0, max = length; i < max; ++i) {
             buffer[i] = this.readSync(8);
+            if (buffer[i] === 0 && firstNullByte < 0)
+                firstNullByte = i;
         }
 
-        return buffer.toString(<any>encoding);
+        if (options.nullTerminated !== false) {
+            if (firstNullByte >= 0) {
+                buffer = buffer.subarray(0, firstNullByte);
+            }
+        }
+
+        return buffer.toString(<any>options.encoding || 'utf-8');
         //return new TextDecoder(encoding).decode(buffer);
     }
 

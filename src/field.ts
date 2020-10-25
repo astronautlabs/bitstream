@@ -19,7 +19,7 @@ function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyntaxEle
 }
 
 function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
-    return reader.readStringSync(field.length, field.options.encoding);
+    return reader.readStringSync(field.length, field.options.stringEncoding);
 }
 
 function structureSerializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
