@@ -1,34 +1,53 @@
-import { FieldOptions } from "./field-options";
+import { BitstreamElement } from "./element";
+import { Deserializer, FieldOptions } from "./field-options";
+import { BitstreamReader } from "./reader";
 import { BitstreamSyntaxElement } from "./syntax-element";
 
-export function Field(length : number, options? : FieldOptions) {
+function numberSerializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
+    return reader.readSync(field.length);
+}
+
+function booleanSerializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
+    return numberSerializer(reader, field) !== 0;
+}
+
+function structureSerializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
+    let element : BitstreamElement = new (field.type as any)();
+    element.deserializeFrom(reader);
+    return element;
+}
+
+export function Field(length? : number, options? : FieldOptions) {
     if (!options)
         options = {};
     
     return (target : any, fieldName : string) => {
-        let classPrototype = Object.getPrototypeOf(target.constructor);
+        let classPrototype = target.constructor;
 
-        if (!classPrototype.syntax) {
+        if (!(classPrototype as Object).hasOwnProperty('syntax')) {
             classPrototype.syntax = [];
-            classPrototype.bitLength = 0;
         }
 
-        let serializer = (v : number) => <any>v;
-        
-        if (!options.deserializer) {
-            let type = Reflect.getMetadata('design:type', target, fieldName);
-            if (type === Boolean)
-                serializer = v => v !== 0;
-
-                options.deserializer = serializer;
-        }
-
-        (<BitstreamSyntaxElement[]>classPrototype.syntax).push({ 
+        let field : BitstreamSyntaxElement = { 
             name: fieldName, 
+            type: Reflect.getMetadata('design:type', target, fieldName),
             length, 
             options 
-        });
+        }
 
-        classPrototype.bitLength += length;
+        if (!options.deserializer) {
+            if (field.type === Object)
+                options.deserializer = numberSerializer;
+            else if (field.type === Number)
+                options.deserializer = numberSerializer;
+            else if (field.type === Boolean)
+                options.deserializer = (reader, field) => numberSerializer(reader, field) !== 0;
+            else if (field.type.prototype instanceof BitstreamElement)
+                options.deserializer = structureSerializer;
+            else
+                throw new Error(`No deserializer available for field ${field.name} with type ${field.type.name}`);
+        }
+
+        (<BitstreamSyntaxElement[]>classPrototype.syntax).push(field);
     }
 }

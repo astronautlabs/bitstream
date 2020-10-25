@@ -24,7 +24,7 @@ export class BitstreamReader {
         let remainingLength = length;
 
         if (this.buffers.length === 0 || this.bufferedLength < length)
-            throw new Error(`Not enough bits are available (read=${length}, buffered=${this.bufferedLength})`);
+            throw new Error(`underrun: Not enough bits are available (requested=${length}, available=${this.bufferedLength})`);
         
         while (remainingLength > 0) {
             let buffer = this.buffers[0];
@@ -78,7 +78,7 @@ export class BitstreamReader {
         }
     }
 
-    protected unread(buffer : Buffer) {
+    unread(buffer : Buffer) {
         this.buffers.unshift(buffer);
     }
     

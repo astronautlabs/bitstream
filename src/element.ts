@@ -3,7 +3,6 @@ import { BitstreamReader } from "./reader";
 import { BitstreamSyntaxElement } from "./syntax-element";
 
 export class BitstreamElement {
-    static bitLength : number = 0;
     static syntax : BitstreamSyntaxElement[] = [];
 
     get syntax() : BitstreamSyntaxElement[] {
@@ -11,14 +10,30 @@ export class BitstreamElement {
     }
 
     protected deserializeGroup(bitstream : BitstreamReader, name : string) {
-        for (let element of (<BitstreamSyntaxElement[]>(this.constructor as any).syntax)) {
-            if (name === '*' || element.options.group === name) {
-                this[element.name] = element.options.deserializer(bitstream.readSync(element.length));
+        let syntax = <BitstreamSyntaxElement[]>(this.constructor as any).syntax;
+
+        for (let element of syntax) {
+            if (name !== '*' && element.options.group !== name)
+                continue;
+            
+            try {
+                this[element.name] = element.options.deserializer(bitstream, element);
+            } catch (thrown) {
+                let e : Error = thrown;
+                if (e.message.startsWith('underrun:')) {
+                    throw new Error(
+                        `Ran out of bits while deserializing field ${element.name} ` 
+                        + `in group '${name}' ` 
+                        + `of element ${this.constructor.name}`
+                    );
+                } else {
+                    throw e;
+                }
             }
         }
     }
 
-    protected deserializeFrom(bitstream : BitstreamReader) {
+    deserializeFrom(bitstream : BitstreamReader) {
         this.deserializeGroup(bitstream, '*');
     }
 
