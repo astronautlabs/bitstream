@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc -p .",
     "test": "npm run build && node dist/test",
+    "benchmark": "npm run build && node dist/benchmark",
     "prepublishOnly": "npm test"
   },
   "repository": {

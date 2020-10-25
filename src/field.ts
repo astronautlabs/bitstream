@@ -15,41 +15,41 @@ export function resolveLength(determinant : LengthDeterminant, instance : any, f
     return length;
 }
 
-function numberDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    return reader.readSync(resolveLength(field.length, instance, field));
+async function numberDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    return await reader.read(resolveLength(field.length, instance, field));
 }
 
-function booleanDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    return numberDeserializer(reader, field, instance) !== 0;
+async function booleanDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    return await numberDeserializer(reader, field, instance) !== 0;
 }
 
-function arrayDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    let count = reader.readSync(field.options.array.countFieldLength);
+async function arrayDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    let count = await reader.read(field.options.array.countFieldLength);
     let elements = [];
 
     for (let i = 0; i < count; ++i) {
         let element : BitstreamElement = new (field.options.array.elementType as any)();
-        element.deserializeFrom(reader);
+        await element.deserializeFrom(reader);
         elements.push(element);
     }
 
     return elements;
 }
 
-function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+async function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
     let buffer = Buffer.alloc(resolveLength(field.length, instance, field) / 8);
     for (let i = 0, max = buffer.length; i < max; ++i)
-        buffer[i] = reader.readSync(8);
+        buffer[i] = await reader.read(8);
     return buffer;
 }
 
-function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    return reader.readStringSync(resolveLength(field.length, instance, field), field.options.stringEncoding);
+async function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    return await reader.readString(resolveLength(field.length, instance, field), field.options.stringEncoding);
 }
 
-function structureDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
+async function structureDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
     let element : BitstreamElement = new (field.type as any)();
-    element.deserializeFrom(reader);
+    await element.deserializeFrom(reader);
     return element;
 }
 

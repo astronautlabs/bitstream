@@ -13,18 +13,15 @@ export class BitstreamElement {
         return (this.constructor as any).syntax;
     }
 
-    protected deserializeGroup(bitstream : BitstreamReader, name : string) {
+    protected async deserializeGroup(bitstream : BitstreamReader, name : string) {
         let syntax = this.syntax;
-
-        // console.log(`${this.constructor.name}:`);
-        // console.dir(syntax);
 
         for (let element of syntax) {
             if (name !== '*' && element.options.group !== name)
                 continue;
             
             try {
-                this[element.name] = element.options.deserializer(bitstream, element, this);
+                this[element.name] = await element.options.deserializer(bitstream, element, this);
             } catch (thrown) {
                 let e : Error = thrown;
                 if (e.message.startsWith('underrun:')) {
@@ -40,13 +37,13 @@ export class BitstreamElement {
         }
     }
 
-    deserializeFrom(bitstream : BitstreamReader) {
-        this.deserializeGroup(bitstream, '*');
+    async deserializeFrom(bitstream : BitstreamReader) {
+        await this.deserializeGroup(bitstream, '*');
     }
 
-    static deserializeSync<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader) : T {
+    static async deserialize<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader) : Promise<T> {
         let instance = new this();
-        instance.deserializeFrom(bitstream);
+        await instance.deserializeFrom(bitstream);
         return instance;
     }
 }

@@ -1,4 +1,5 @@
 import { Transform } from "stream";
+import { Constructor } from "./constructor";
 import { StringEncodingOptions } from "./string-encoding-options";
 
 export interface BitstreamRequest {
@@ -26,6 +27,29 @@ export class BitstreamReader {
             throw new Error(`Only one read() can be outstanding at a time.`);
     }
 
+    async readString(length : number, options? : StringEncodingOptions): Promise<string> {
+        this.ensureNoReadPending();
+
+        if (!options)
+            options = {};
+        
+        let buffer = Buffer.alloc(length);
+        let firstNullByte = -1;
+        for (let i = 0, max = length; i < max; ++i) {
+            buffer[i] = await this.read(8);
+            if (buffer[i] === 0 && firstNullByte < 0)
+                firstNullByte = i;
+        }
+
+        if (options.nullTerminated !== false) {
+            if (firstNullByte >= 0) {
+                buffer = buffer.subarray(0, firstNullByte);
+            }
+        }
+
+        return buffer.toString(<any>options.encoding || 'utf-8');
+    }
+
     readStringSync(length : number, options? : StringEncodingOptions): string {
         if (!options)
             options = {};
@@ -47,7 +71,6 @@ export class BitstreamReader {
         }
 
         return buffer.toString(<any>options.encoding || 'utf-8');
-        //return new TextDecoder(encoding).decode(buffer);
     }
 
     readSync(length : number): number {
@@ -85,8 +108,7 @@ export class BitstreamReader {
     }
 
     assure(length : number) : Promise<void> {
-        if (this.blockedRequest)
-            throw new Error(`Only one read()/assure() can be outstanding at a time.`);
+        this.ensureNoReadPending();
 
         if (this.bufferedLength >= length) {
             return Promise.resolve();
@@ -99,8 +121,7 @@ export class BitstreamReader {
     }
 
     read(length : number) : Promise<number> {
-        if (this.blockedRequest)
-            throw new Error(`Only one read()/assure() can be outstanding at a time.`);
+        this.ensureNoReadPending();
         
         if (this.bufferedLength >= length) {
             return Promise.resolve(this.readSync(length));
@@ -121,11 +142,13 @@ export class BitstreamReader {
         this.bufferedLength += buffer.length * 8;
 
         if (this.blockedRequest && this.blockedRequest.length <= this.bufferedLength) {
+            let request = this.blockedRequest;
             this.blockedRequest = null;
-            if (this.blockedRequest.peek) {
-                this.blockedRequest.resolve(0);
+
+            if (request.peek) {
+                request.resolve(0);
             } else {
-                return this.readSync(this.blockedRequest.length);
+                request.resolve(this.readSync(request.length));
             }
         }
     }

@@ -5,7 +5,7 @@ import { Field } from "./field";
 import { BitstreamReader } from "./reader";
 
 describe('BitstreamElement', it => {
-    it('correctly deserializes a basic element in synchronous mode', () => {
+    it('correctly deserializes a basic element in synchronous mode', async () => {
         class ExampleElement extends BitstreamElement {
             @Field(2) a;
             @Field(3) b;
@@ -22,7 +22,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = ExampleElement.deserializeSync(bitstream);
+        let element = await ExampleElement.deserialize(bitstream);
 
         expect(element.a).to.equal(0b10);
         expect(element.b).to.equal(0b010);
@@ -31,7 +31,7 @@ describe('BitstreamElement', it => {
         expect(element.e).to.equal(0b000010);
     });
 
-    it('correctly deserializes nested elements', () => {
+    it('correctly deserializes nested elements', async () => {
 
         class PartElement extends BitstreamElement {
             @Field(3) c;
@@ -54,7 +54,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = WholeElement.deserializeSync(bitstream);
+        let element = await WholeElement.deserialize(bitstream);
 
         expect(element.a)       .to.equal(0b1);
         expect(element.b)       .to.equal(0b10);
@@ -65,7 +65,7 @@ describe('BitstreamElement', it => {
 
     });
 
-    it('correctly deserializes inherited fields', () => {
+    it('correctly deserializes inherited fields', async () => {
         
         class BaseElement extends BitstreamElement {
             @Field(1) a;
@@ -87,7 +87,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = ExtendedElement.deserializeSync(bitstream);
+        let element = await ExtendedElement.deserialize(bitstream);
 
         expect(element.a).to.equal(0b1);
         expect(element.b).to.equal(0b10);
@@ -98,7 +98,7 @@ describe('BitstreamElement', it => {
 
     });
 
-    it('understands Buffer when length is a multiple of 8', () => {
+    it('understands Buffer when length is a multiple of 8', async () => {
         class CustomElement extends BitstreamElement {
             @Field(4) a;
             @Field(4) b;
@@ -113,7 +113,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = CustomElement.deserializeSync(bitstream);
+        let element = await CustomElement.deserialize(bitstream);
 
         expect(element.a).to.equal(0b1101);
         expect(element.b).to.equal(0b0110);
@@ -138,7 +138,7 @@ describe('BitstreamElement', it => {
         expect(caught, 'should have thrown an error').to.exist;
     });
 
-    it('understands strings', () => {
+    it('understands strings', async () => {
         class CustomElement extends BitstreamElement {
             @Field(4) a;
             @Field(4) b;
@@ -149,14 +149,14 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from([ 0b11010110 ]));
         bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
 
-        let element = CustomElement.deserializeSync(bitstream);
+        let element = await CustomElement.deserialize(bitstream);
 
         expect(element.a).to.equal(0b1101);
         expect(element.b).to.equal(0b0110);
         expect(element.c).to.equal('hello');
     });
 
-    it('understands discriminants', () => {
+    it('understands discriminants', async () => {
         
         class CustomElement extends BitstreamElement {
             @Field(8) charCount;
@@ -169,14 +169,14 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
         bitstream.addBuffer(Buffer.from([ 123 ]));
 
-        let element = CustomElement.deserializeSync(bitstream);
+        let element = await CustomElement.deserialize(bitstream);
 
         expect(element.charCount).to.equal(5);
         expect(element.str).to.equal('hello');
         expect(element.afterwards).to.equal(123);
     });
     
-    it('should throw when result of a length discriminant is undefined', () => {
+    it('should throw when result of a length discriminant is undefined', async () => {
         
         let caught;
         class CustomElement extends BitstreamElement {
@@ -191,14 +191,14 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from([ 123 ]));
 
         try {
-            CustomElement.deserializeSync(bitstream);
+            await CustomElement.deserialize(bitstream);
         } catch (e) {
             caught = e;
         }
 
         expect(caught).to.exist;
     });
-    it('should throw when result of a length discriminant is not a number', () => {
+    it('should throw when result of a length discriminant is not a number', async () => {
         
         let caught;
         class CustomElement extends BitstreamElement {
@@ -213,14 +213,14 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from([ 123 ]));
 
         try {
-            CustomElement.deserializeSync(bitstream);
+            await CustomElement.deserialize(bitstream);
         } catch (e) {
             caught = e;
         }
 
         expect(caught).to.exist;
     });
-    it('should understand arrays', () => {
+    it('should understand arrays', async () => {
         class ItemElement extends BitstreamElement {
             @Field(8) a;
             @Field(8) b;
@@ -234,7 +234,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 123, 3, 1, 2, 11, 12, 21, 22, 123 ]));
 
-        let element = CustomElement.deserializeSync(bitstream);
+        let element = await CustomElement.deserialize(bitstream);
 
         expect(element.before).to.equal(123);
         expect(element.items.length).to.equal(3);
