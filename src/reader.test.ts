@@ -27,5 +27,12 @@ describe('BitstreamReader', it => {
 
         expect(bitstream.readSync(11)).to.equal(0b01100100100);
         expect(bitstream.readSync(5)).to.equal(0b01110);
-    })
+    });
+
+    it('can read fixed length UTF-8 strings', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
+        let str = bitstream.readStringSync(5);
+        expect(str).to.equal('hello');
+    });
 });

@@ -97,4 +97,62 @@ describe('BitstreamElement', it => {
         expect(element.f).to.equal(0b000101);
 
     });
+
+    it('understands Buffer when length is a multiple of 8', () => {
+        class CustomElement extends BitstreamElement {
+            @Field(4) a;
+            @Field(4) b;
+            @Field(16) c : Buffer;
+        }
+
+        //            |---|---|---------------X
+        let value = 0b11010110101011000010100000000000;
+        let buffer = Buffer.alloc(4);
+        buffer.writeUInt32BE(value);
+
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(buffer);
+
+        let element = CustomElement.deserializeSync(bitstream);
+
+        expect(element.a).to.equal(0b1101);
+        expect(element.b).to.equal(0b0110);
+        expect(element.c.length).to.equal(2);
+        expect(element.c[0]).to.equal(0b10101100);
+        expect(element.c[1]).to.equal(0b00101000);
+    });
+
+    it('fails when Buffer field has non multiple-of-8 length', () => {
+        let caught : Error;
+
+        try {
+            class CustomElement extends BitstreamElement {
+                @Field(4) a;
+                @Field(4) b;
+                @Field(7) c : Buffer;
+            }
+        } catch (e) {
+            caught = e;
+        }
+
+        expect(caught, 'should have thrown an error').to.exist;
+    });
+
+    it('understands strings', () => {
+        class CustomElement extends BitstreamElement {
+            @Field(4) a;
+            @Field(4) b;
+            @Field(5) c : string;
+        }
+
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 0b11010110 ]));
+        bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
+
+        let element = CustomElement.deserializeSync(bitstream);
+
+        expect(element.a).to.equal(0b1101);
+        expect(element.b).to.equal(0b0110);
+        expect(element.c).to.equal('hello');
+    });
 })

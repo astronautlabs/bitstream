@@ -10,6 +10,17 @@ export class BitstreamWriter {
     private buffer : Buffer;
     private bufferedBytes = 0;
 
+    writeString(value : string, byteCount : number, encoding : string = 'utf-8') {
+        let buffer = Buffer.alloc(byteCount);
+        Buffer.from(value, <any>encoding).copy(buffer);
+        this.writeBuffer(buffer);
+    }
+
+    writeBuffer(buffer : Buffer) {
+        for (let i = 0, max = buffer.length; i < max; ++i)
+            this.write(8, buffer[i]);
+    }
+
     write(length : number, value : number) {
         value = value % Math.pow(2, length);
         

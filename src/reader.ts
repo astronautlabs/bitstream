@@ -12,19 +12,39 @@ export class BitstreamReader {
     private blockedRequest : BitstreamRequest = null;
     private offset = 0;
 
-    available(length : number) {
+    get available() {
+        return this.bufferedLength;
+    }
+
+    isAvailable(length : number) {
         return this.bufferedLength >= length;
     }
 
-    readSync(length : number) {
+    private ensureNoReadPending() {
         if (this.blockedRequest)
             throw new Error(`Only one read() can be outstanding at a time.`);
+    }
+
+    readStringSync(length : number, encoding = 'utf-8'): string {
+        this.ensureNoReadPending();
+
+        let buffer = Buffer.alloc(length);
+        for (let i = 0, max = length; i < max; ++i) {
+            buffer[i] = this.readSync(8);
+        }
+
+        return buffer.toString(<any>encoding);
+        //return new TextDecoder(encoding).decode(buffer);
+    }
+
+    readSync(length : number): number {
+        this.ensureNoReadPending();
         
         let value = 0;
         let remainingLength = length;
 
         if (this.buffers.length === 0 || this.bufferedLength < length)
-            throw new Error(`underrun: Not enough bits are available (requested=${length}, available=${this.bufferedLength})`);
+            throw new Error(`underrun: Not enough bits are available (requested=${length}, available=${this.bufferedLength}, buffers=${this.buffers.length})`);
         
         while (remainingLength > 0) {
             let buffer = this.buffers[0];
@@ -44,6 +64,7 @@ export class BitstreamReader {
 
             if (this.offset >= buffer.length*8) {
                 this.buffers.shift();
+                this.offset = 0;
             }
         }
 

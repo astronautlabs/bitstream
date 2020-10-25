@@ -34,7 +34,7 @@ number of bits. If this is not the case, `readSync()` throws an error. You can c
 the `available()` method:
 
 ```typescript
-if (reader.available(10)) {
+if (reader.isAvailable(10)) {
     // 10 bits are available
 }
 ```
