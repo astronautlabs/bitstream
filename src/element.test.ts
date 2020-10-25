@@ -155,4 +155,48 @@ describe('BitstreamElement', it => {
         expect(element.b).to.equal(0b0110);
         expect(element.c).to.equal('hello');
     });
+
+    it('understands discriminants', () => {
+        
+        class CustomElement extends BitstreamElement {
+            @Field(8) charCount;
+            @Field(i => i.charCount) str : string;
+            @Field(8) afterwards;
+        }
+
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 5 ]));
+        bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        let element = CustomElement.deserializeSync(bitstream);
+
+        expect(element.charCount).to.equal(5);
+        expect(element.str).to.equal('hello');
+        expect(element.afterwards).to.equal(123);
+    });
+    
+    it('discriminants should throw when result is undefined', () => {
+        
+        let caught;
+        class CustomElement extends BitstreamElement {
+            @Field(8) charCount;
+            @Field(i => i.whoopsDoesntExist) str : string;
+            @Field(8) afterwards;
+        }
+
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 5 ]));
+        bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        try {
+            CustomElement.deserializeSync(bitstream);
+        } catch (e) {
+            console.log(e.message);
+            caught = e;
+        }
+
+        expect(caught).to.exist;
+    });
 })

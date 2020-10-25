@@ -3,23 +3,35 @@ import { Deserializer, FieldOptions } from "./field-options";
 import { BitstreamReader } from "./reader";
 import { BitstreamSyntaxElement } from "./syntax-element";
 
-function numberDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
-    return reader.readSync(field.length);
+export function resolveLength(determinant : LengthDeterminant, instance : any, field : BitstreamSyntaxElement) {
+    if (typeof determinant === 'number')
+        return determinant;
+
+    let length = determinant(instance, field);
+
+    if (typeof length !== 'number')
+        throw new Error(`Length determinant for field ${field.containingType.name}#${field.name} returned non-number value: ${length}`);
+
+    return length;
 }
 
-function booleanDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
-    return numberDeserializer(reader, field) !== 0;
+function numberDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    return reader.readSync(resolveLength(field.length, instance, field));
 }
 
-function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
-    let buffer = Buffer.alloc(field.length / 8);
+function booleanDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    return numberDeserializer(reader, field, instance) !== 0;
+}
+
+function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    let buffer = Buffer.alloc(resolveLength(field.length, instance, field) / 8);
     for (let i = 0, max = buffer.length; i < max; ++i)
         buffer[i] = reader.readSync(8);
     return buffer;
 }
 
-function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
-    return reader.readStringSync(field.length, field.options.stringEncoding);
+function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
+    return reader.readStringSync(resolveLength(field.length, instance, field), field.options.stringEncoding);
 }
 
 function structureSerializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
@@ -28,26 +40,29 @@ function structureSerializer(reader : BitstreamReader, field : BitstreamSyntaxEl
     return element;
 }
 
-export function Field(length? : number, options? : FieldOptions) {
+export type LengthDeterminant = number | ((any, BitstreamSyntaxElement) => number);
+
+export function Field(length? : LengthDeterminant, options? : FieldOptions) {
     if (!options)
         options = {};
     
     return (target : any, fieldName : string) => {
-        let elementClass = target.constructor;
+        let containingType = target.constructor;
 
-        if (!(elementClass as Object).hasOwnProperty('ownSyntax')) {
-            elementClass.ownSyntax = [];
+        if (!(containingType as Object).hasOwnProperty('ownSyntax')) {
+            containingType.ownSyntax = [];
         }
 
         let field : BitstreamSyntaxElement = { 
             name: fieldName, 
+            containingType,
             type: Reflect.getMetadata('design:type', target, fieldName),
             length, 
             options 
         }
 
-        if (field.type === Buffer && field.length % 8 !== 0)
-            throw new Error(`${elementClass.name}#${field.name}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
+        if (field.type === Buffer && typeof field.length === 'number' && field.length % 8 !== 0)
+            throw new Error(`${containingType.name}#${field.name}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
 
         if (!options.deserializer) {
             if (field.type === Object)
@@ -66,6 +81,6 @@ export function Field(length? : number, options? : FieldOptions) {
                 throw new Error(`No deserializer available for field ${field.name} with type ${field.type.name}`);
         }
 
-        (<BitstreamSyntaxElement[]>elementClass.ownSyntax).push(field);
+        (<BitstreamSyntaxElement[]>containingType.ownSyntax).push(field);
     }
 }

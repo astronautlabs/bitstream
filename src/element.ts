@@ -24,7 +24,7 @@ export class BitstreamElement {
                 continue;
             
             try {
-                this[element.name] = element.options.deserializer(bitstream, element);
+                this[element.name] = element.options.deserializer(bitstream, element, this);
             } catch (thrown) {
                 let e : Error = thrown;
                 if (e.message.startsWith('underrun:')) {
