@@ -7,7 +7,7 @@ export type Deserializer = (reader : BitstreamReader, field : BitstreamSyntaxEle
 
 export interface FieldOptions {
     deserializer? : Deserializer;
-    stringEncoding? : StringEncodingOptions;
+    string? : StringEncodingOptions;
     array? : ArrayOptions;
     group? : string;
 }

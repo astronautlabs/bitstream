@@ -28,7 +28,7 @@ async function arrayDeserializer(reader : BitstreamReader, field : BitstreamSynt
     let elements = [];
 
     for (let i = 0; i < count; ++i) {
-        let element : BitstreamElement = new (field.options.array.elementType as any)();
+        let element : BitstreamElement = new (field.options.array.type as any)();
         await element.deserializeFrom(reader);
         elements.push(element);
     }
@@ -44,7 +44,7 @@ async function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyn
 }
 
 async function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    return await reader.readString(resolveLength(field.length, instance, field), field.options.stringEncoding);
+    return await reader.readString(resolveLength(field.length, instance, field), field.options.string);
 }
 
 async function structureDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
@@ -78,9 +78,9 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
             throw new Error(`${containingType.name}#${field.name}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
 
         if (field.type === Array) {
-            if (!field.options.array?.elementType)
-                throw new Error(`${containingType.name}#${field.name}: Array field must specify option array.elementType`);
-            if (!(field.options.array?.elementType.prototype instanceof BitstreamElement))
+            if (!field.options.array?.type)
+                throw new Error(`${containingType.name}#${field.name}: Array field must specify option array.type`);
+            if (!(field.options.array?.type.prototype instanceof BitstreamElement))
                 throw new Error(`${containingType.name}#${field.name}: Array fields can only be used with types which inherit from BitstreamElement`);
             if (typeof field.options.array?.countFieldLength !== 'number' || field.options.array?.countFieldLength <= 0)
                 throw new Error(`${containingType.name}#${field.name}: Invalid value provided for length of count field: ${field.options.array?.countFieldLength}`);

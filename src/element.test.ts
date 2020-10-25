@@ -227,7 +227,7 @@ describe('BitstreamElement', it => {
         }
         class CustomElement extends BitstreamElement {
             @Field(8) before;
-            @Field(0, { array: { elementType: ItemElement, countFieldLength: 8 } }) items : ItemElement[];
+            @Field(0, { array: { type: ItemElement, countFieldLength: 8 } }) items : ItemElement[];
             @Field(8) afterwards;
         }
 
@@ -247,7 +247,7 @@ describe('BitstreamElement', it => {
         expect(element.items[2].b).to.equal(22);
         expect(element.afterwards).to.equal(123);
     });
-    it('should throw when array is used without specifying elementType', () => {
+    it('should throw when array is used without specifying type', () => {
         
         let caught;
         try {
