@@ -193,7 +193,6 @@ describe('BitstreamElement', it => {
         try {
             CustomElement.deserializeSync(bitstream);
         } catch (e) {
-            console.log(e.message);
             caught = e;
         }
 
