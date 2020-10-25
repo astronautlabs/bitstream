@@ -64,4 +64,37 @@ describe('BitstreamElement', it => {
         expect(element.f)       .to.equal(0b000101);
 
     });
+
+    it('correctly deserializes inherited fields', () => {
+        
+        class BaseElement extends BitstreamElement {
+            @Field(1) a;
+            @Field(2) b;
+        }
+
+        class ExtendedElement extends BaseElement {
+            @Field(3) c;
+            @Field(4) d;
+            @Field(5) e;
+            @Field(6) f;
+        }
+
+        //            ||-|--|---|----|-----X-----
+        let value = 0b11010110101011000010100000000000;
+        let buffer = Buffer.alloc(4);
+        buffer.writeUInt32BE(value);
+
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(buffer);
+
+        let element = ExtendedElement.deserializeSync(bitstream);
+
+        expect(element.a).to.equal(0b1);
+        expect(element.b).to.equal(0b10);
+        expect(element.c).to.equal(0b101);
+        expect(element.d).to.equal(0b1010);
+        expect(element.e).to.equal(0b10110);
+        expect(element.f).to.equal(0b000101);
+
+    });
 })

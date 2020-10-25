@@ -24,8 +24,8 @@ export function Field(length? : number, options? : FieldOptions) {
     return (target : any, fieldName : string) => {
         let classPrototype = target.constructor;
 
-        if (!(classPrototype as Object).hasOwnProperty('syntax')) {
-            classPrototype.syntax = [];
+        if (!(classPrototype as Object).hasOwnProperty('ownSyntax')) {
+            classPrototype.ownSyntax = [];
         }
 
         let field : BitstreamSyntaxElement = { 
@@ -48,6 +48,6 @@ export function Field(length? : number, options? : FieldOptions) {
                 throw new Error(`No deserializer available for field ${field.name} with type ${field.type.name}`);
         }
 
-        (<BitstreamSyntaxElement[]>classPrototype.syntax).push(field);
+        (<BitstreamSyntaxElement[]>classPrototype.ownSyntax).push(field);
     }
 }
