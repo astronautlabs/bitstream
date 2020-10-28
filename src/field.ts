@@ -1,9 +1,11 @@
 import { BitstreamElement } from "./element";
 import { Deserializer, FieldOptions } from "./field-options";
 import { BitstreamReader } from "./reader";
-import { BitstreamSyntaxElement } from "./syntax-element";
+import { Serializer } from "./serializer";
+import { FieldDefinition } from "./syntax-element";
+import { BitstreamWriter } from "./writer";
 
-export function resolveLength(determinant : LengthDeterminant, instance : any, field : BitstreamSyntaxElement) {
+export function resolveLength(determinant : LengthDeterminant, instance : any, field : FieldDefinition) {
     if (typeof determinant === 'number')
         return determinant;
 
@@ -15,42 +17,97 @@ export function resolveLength(determinant : LengthDeterminant, instance : any, f
     return length;
 }
 
-async function numberDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    return await reader.read(resolveLength(field.length, instance, field));
-}
-
-async function booleanDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    return await numberDeserializer(reader, field, instance) !== 0;
-}
-
-async function arrayDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    let count = await reader.read(field.options.array.countFieldLength);
-    let elements = [];
-
-    for (let i = 0; i < count; ++i) {
-        let element : BitstreamElement = new (field.options.array.type as any)();
-        await element.deserializeFrom(reader);
-        elements.push(element);
+export class NumberSerializer implements Serializer {
+    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
+        return await reader.read(resolveLength(field.length, instance, field));
     }
 
-    return elements;
+    write(writer: BitstreamWriter, field: FieldDefinition, value: any, instance: any) {
+        writer.write(resolveLength(field.length, instance, field), value);
+    }
 }
 
-async function bufferDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    let buffer = Buffer.alloc(resolveLength(field.length, instance, field) / 8);
-    for (let i = 0, max = buffer.length; i < max; ++i)
-        buffer[i] = await reader.read(8);
-    return buffer;
+export class BooleanSerializer implements Serializer {
+    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
+        return await reader.read(resolveLength(field.length, instance, field)) !== 0;
+    }
+
+    write(writer: BitstreamWriter, field: FieldDefinition, value: any, instance: any) {
+        writer.write(resolveLength(field.length, instance, field), value ? 1 : 0);
+    }
 }
 
-async function stringDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement, instance : any) {
-    return await reader.readString(resolveLength(field.length, instance, field), field.options.string);
+export class ArraySerializer implements Serializer {
+    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
+        let count = await reader.read(field.options.array.countFieldLength);
+        let elements = [];
+    
+        for (let i = 0; i < count; ++i) {
+            let element : BitstreamElement = new (field.options.array.type as any)();
+            await element.read(reader);
+            elements.push(element);
+        }
+    
+        return elements;
+    }
+
+    write(writer: BitstreamWriter, field: FieldDefinition, value: any[], instance: any) {
+        let length = value.length;
+        let countFieldLength = field.options.array.countFieldLength;
+
+        if (length >= Math.pow(2, countFieldLength)) {
+            length = Math.pow(2, countFieldLength) - 1;
+        }
+
+        writer.write(field.options.array.countFieldLength, value.length);
+        
+        for (let i = 0; i < length; ++i) {
+            value[i].write(writer);
+        }
+    }
 }
 
-async function structureDeserializer(reader : BitstreamReader, field : BitstreamSyntaxElement) {
-    let element : BitstreamElement = new (field.type as any)();
-    await element.deserializeFrom(reader);
-    return element;
+export class BufferSerializer implements Serializer {
+    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
+        let buffer = Buffer.alloc(resolveLength(field.length, instance, field) / 8);
+        for (let i = 0, max = buffer.length; i < max; ++i)
+            buffer[i] = await reader.read(8);
+        return buffer;
+    }
+
+    write(writer: BitstreamWriter, field: FieldDefinition, value: Buffer, instance: any) {
+        let fieldLength = Math.floor(resolveLength(field.length, instance, field) / 8);
+
+        if (value.length > fieldLength) {
+            writer.writeBuffer(value.subarray(0, resolveLength(field.length, instance, field)));
+        } else {
+            writer.writeBuffer(value);
+            if (value.length < fieldLength)
+                writer.writeBuffer(Buffer.alloc(fieldLength - value.length, 0));
+        }
+    }
+}
+
+export class StringSerializer implements Serializer {
+    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
+        return await reader.readString(resolveLength(field.length, instance, field), field.options.string);
+    }
+
+    write(writer: BitstreamWriter, field: FieldDefinition, value: string, instance: any) {
+        writer.writeString(resolveLength(field.length, instance, field), `${value}`, field?.options?.string?.encoding || 'utf-8');
+    }
+}
+
+export class StructureSerializer implements Serializer {
+    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
+        let element : BitstreamElement = new (field.type as any)();
+        await element.read(reader);
+        return element;
+    }
+
+    write(writer: BitstreamWriter, field: FieldDefinition, value: BitstreamElement, instance: any) {
+        value.write(writer);
+    }
 }
 
 export type LengthDeterminant = number | ((any, BitstreamSyntaxElement) => number);
@@ -66,7 +123,7 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
             containingType.ownSyntax = [];
         }
 
-        let field : BitstreamSyntaxElement = { 
+        let field : FieldDefinition = { 
             name: fieldName, 
             containingType,
             type: Reflect.getMetadata('design:type', target, fieldName),
@@ -86,25 +143,25 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
                 throw new Error(`${containingType.name}#${field.name}: Invalid value provided for length of count field: ${field.options.array?.countFieldLength}`);
         }
 
-        if (!options.deserializer) {
+        if (!options.serializer) {
             if (field.type === Object)
-                options.deserializer = numberDeserializer;
+                options.serializer = new NumberSerializer();
             else if (field.type === Number)
-                options.deserializer = numberDeserializer;
+                options.serializer = new NumberSerializer();
             else if (field.type === Boolean)
-                options.deserializer = booleanDeserializer;
+                options.serializer = new BooleanSerializer();
             else if (field.type === Buffer)
-                options.deserializer = bufferDeserializer;
+                options.serializer = new BufferSerializer();
             else if (field.type === String)
-                options.deserializer = stringDeserializer;
+                options.serializer = new StringSerializer();
             else if (field.type.prototype instanceof BitstreamElement)
-                options.deserializer = structureDeserializer;
+                options.serializer = new StructureSerializer();
             else if (field.type === Array)
-                options.deserializer = arrayDeserializer;
+                options.serializer = new ArraySerializer();
             else
-                throw new Error(`No deserializer available for field ${field.name} with type ${field.type.name}`);
+                throw new Error(`No serializer available for field ${field.name} with type ${field.type.name}`);
         }
 
-        (<BitstreamSyntaxElement[]>containingType.ownSyntax).push(field);
+        (<FieldDefinition[]>containingType.ownSyntax).push(field);
     }
 }

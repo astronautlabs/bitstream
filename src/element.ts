@@ -1,19 +1,20 @@
 import { Constructor } from "./constructor";
 import { BitstreamReader } from "./reader";
-import { BitstreamSyntaxElement } from "./syntax-element";
+import { FieldDefinition } from "./syntax-element";
+import { BitstreamWriter } from "./writer";
 
 export class BitstreamElement {
-    static get syntax() : BitstreamSyntaxElement[] {
+    static get syntax() : FieldDefinition[] {
         return (Object.getPrototypeOf(this).syntax || []).concat(this.ownSyntax || []);
     }
 
-    static ownSyntax : BitstreamSyntaxElement[];
+    static ownSyntax : FieldDefinition[];
 
-    get syntax() : BitstreamSyntaxElement[] {
+    get syntax() : FieldDefinition[] {
         return (this.constructor as any).syntax;
     }
 
-    protected async deserializeGroup(bitstream : BitstreamReader, name : string) {
+    protected async readGroup(bitstream : BitstreamReader, name : string) {
         let syntax = this.syntax;
 
         for (let element of syntax) {
@@ -21,7 +22,7 @@ export class BitstreamElement {
                 continue;
             
             try {
-                this[element.name] = await element.options.deserializer(bitstream, element, this);
+                this[element.name] = await element.options.serializer.read(bitstream, element, this);
             } catch (thrown) {
                 let e : Error = thrown;
                 if (e.message.startsWith('underrun:')) {
@@ -37,13 +38,27 @@ export class BitstreamElement {
         }
     }
 
-    async deserializeFrom(bitstream : BitstreamReader) {
-        await this.deserializeGroup(bitstream, '*');
+    protected async writeGroup(bitstream : BitstreamWriter, name : string) {
+        let syntax = this.syntax;
+        for (let element of syntax) {
+            if (name !== '*' && element.options.group !== name)
+                continue;
+            
+            element.options.serializer.write(bitstream, element, this[element.name], this);
+        }
     }
 
-    static async deserialize<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader) : Promise<T> {
+    async read(bitstream : BitstreamReader) {
+        await this.readGroup(bitstream, '*');
+    }
+
+    static async read<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader) : Promise<T> {
         let instance = new this();
-        await instance.deserializeFrom(bitstream);
+        await instance.read(bitstream);
         return instance;
+    }
+
+    async write(bitstream : BitstreamWriter) {
+        await this.writeGroup(bitstream, '*');
     }
 }

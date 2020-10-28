@@ -22,7 +22,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = await ExampleElement.deserialize(bitstream);
+        let element = await ExampleElement.read(bitstream);
 
         expect(element.a).to.equal(0b10);
         expect(element.b).to.equal(0b010);
@@ -54,7 +54,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = await WholeElement.deserialize(bitstream);
+        let element = await WholeElement.read(bitstream);
 
         expect(element.a)       .to.equal(0b1);
         expect(element.b)       .to.equal(0b10);
@@ -87,7 +87,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = await ExtendedElement.deserialize(bitstream);
+        let element = await ExtendedElement.read(bitstream);
 
         expect(element.a).to.equal(0b1);
         expect(element.b).to.equal(0b10);
@@ -113,7 +113,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(buffer);
 
-        let element = await CustomElement.deserialize(bitstream);
+        let element = await CustomElement.read(bitstream);
 
         expect(element.a).to.equal(0b1101);
         expect(element.b).to.equal(0b0110);
@@ -149,7 +149,7 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from([ 0b11010110 ]));
         bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
 
-        let element = await CustomElement.deserialize(bitstream);
+        let element = await CustomElement.read(bitstream);
 
         expect(element.a).to.equal(0b1101);
         expect(element.b).to.equal(0b0110);
@@ -169,7 +169,7 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from('hello', 'utf-8'));
         bitstream.addBuffer(Buffer.from([ 123 ]));
 
-        let element = await CustomElement.deserialize(bitstream);
+        let element = await CustomElement.read(bitstream);
 
         expect(element.charCount).to.equal(5);
         expect(element.str).to.equal('hello');
@@ -191,7 +191,7 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from([ 123 ]));
 
         try {
-            await CustomElement.deserialize(bitstream);
+            await CustomElement.read(bitstream);
         } catch (e) {
             caught = e;
         }
@@ -213,7 +213,7 @@ describe('BitstreamElement', it => {
         bitstream.addBuffer(Buffer.from([ 123 ]));
 
         try {
-            await CustomElement.deserialize(bitstream);
+            await CustomElement.read(bitstream);
         } catch (e) {
             caught = e;
         }
@@ -234,7 +234,7 @@ describe('BitstreamElement', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 123, 3, 1, 2, 11, 12, 21, 22, 123 ]));
 
-        let element = await CustomElement.deserialize(bitstream);
+        let element = await CustomElement.read(bitstream);
 
         expect(element.before).to.equal(123);
         expect(element.items.length).to.equal(3);

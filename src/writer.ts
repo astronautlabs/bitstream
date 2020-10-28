@@ -10,7 +10,7 @@ export class BitstreamWriter {
     private buffer : Buffer;
     private bufferedBytes = 0;
 
-    writeString(value : string, byteCount : number, encoding : string = 'utf-8') {
+    writeString(byteCount : number, value : string, encoding : string = 'utf-8') {
         let buffer = Buffer.alloc(byteCount);
         Buffer.from(value, <any>encoding).copy(buffer);
         this.writeBuffer(buffer);
