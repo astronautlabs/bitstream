@@ -4,3 +4,4 @@ export * from './writer';
 export * from './syntax-element';
 export * from './field-options';
 export * from './field';
+export * from './constructor';
