@@ -140,4 +140,19 @@ describe('BitstreamReader', it => {
         bitstream.skip(1);
         expect(bitstream.readSync(5)).to.equal(0b01110);
     });
+    it('peeks correctly', () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(Buffer.from([ 0b11001010, 0b01010100 ]));
+
+        expect(bitstream.peekSync(4)).to.equal(0b1100);
+        expect(bitstream.readSync(1)).to.equal(0b1);
+        expect(bitstream.readSync(3)).to.equal(0b100);
+        expect(bitstream.peekSync(8)).to.equal(0b10100101);
+        expect(bitstream.readSync(1)).to.equal(0b1);
+        expect(bitstream.readSync(3)).to.equal(0b010);
+        expect(bitstream.peekSync(2)).to.equal(0b01);
+        expect(bitstream.readSync(4)).to.equal(0b0101);
+        expect(bitstream.readSync(4)).to.equal(0b0100);
+    });
 });
