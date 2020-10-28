@@ -61,4 +61,16 @@ export class BitstreamElement {
     async write(bitstream : BitstreamWriter) {
         await this.writeGroup(bitstream, '*');
     }
+
+    /**
+     * Apply the given properties to this object 
+     * and return ourself.
+     * 
+     * @param this 
+     * @param changes 
+     */
+    with<T>(this : T, changes : Partial<T>): T {
+        Object.assign(this, changes);
+        return this;
+    }
 }
