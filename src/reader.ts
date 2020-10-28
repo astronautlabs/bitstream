@@ -15,7 +15,7 @@ export class BitstreamReader {
     private offset = 0;
 
     get available() {
-        return this.bufferedLength;
+        return this.bufferedLength - this.skippedLength;
     }
 
     isAvailable(length : number) {
@@ -73,38 +73,82 @@ export class BitstreamReader {
         return buffer.toString(<any>options.encoding || 'utf-8');
     }
 
+    peekSync(length : number) {
+        return this.readCoreSync(length, false);
+    }
+
+    private skippedLength = 0;
+
+    skip(length : number) {
+        this.skippedLength += length;
+    }
+    
     readSync(length : number): number {
+        return this.readCoreSync(length, true);
+    }
+
+    private readCoreSync(length : number, consume : boolean): number {
         this.ensureNoReadPending();
         
         let value = 0;
         let remainingLength = length;
 
-        if (this.buffers.length === 0 || this.bufferedLength < length)
+        if (this.available < length)
             throw new Error(`underrun: Not enough bits are available (requested=${length}, available=${this.bufferedLength}, buffers=${this.buffers.length})`);
         
-        while (remainingLength > 0) {
-            let buffer = this.buffers[0];
+        this.adjustSkip();
 
-            let byte = buffer[Math.floor(this.offset / 8)];
+        let offset = this.offset;
+        let bufferIndex = 0;
+
+        while (remainingLength > 0) {
+            let buffer = this.buffers[bufferIndex];
+            let byte = buffer[Math.floor(offset / 8)];
             
-            let bitOffset = this.offset % 8;
+            let bitOffset = offset % 8;
             let bitContribution = Math.min(8 - bitOffset, remainingLength);
-            let mask = Math.pow(0x2, bitContribution) - 1;            
+            let mask = Math.pow(0x2, bitContribution) - 1;
+            
             value = (value << bitContribution) | ((byte >> (8 - bitContribution - bitOffset)) & mask);
 
             // update counters
 
-            this.offset += bitContribution;
-            this.bufferedLength -= bitContribution;
+            offset += bitContribution;
             remainingLength -= bitContribution;
 
-            if (this.offset >= buffer.length*8) {
-                this.buffers.shift();
-                this.offset = 0;
+            if (offset >= buffer.length*8) {
+                bufferIndex += 1;
+                offset = 0;
             }
+        }
+        
+        if (consume) {
+            this.buffers.splice(0, bufferIndex);
+            this.bufferedLength -= length;
+            this.offset = offset;
         }
 
         return value;
+    }
+
+    private adjustSkip() {
+        if (this.skippedLength <= 0)
+            return;
+        
+        // First, remove any buffers that are completely skipped
+        while (this.buffers && this.skippedLength > this.buffers[0].length*8-this.offset) {
+            this.skippedLength -= (this.buffers[0].length*8 - this.offset);
+            this.offset = 0;
+            this.buffers.shift();
+        }
+
+        // If any buffers are left, then the amount of remaining skipped bits is 
+        // less than the full length of the buffer, so entirely consume the skipped length
+        // by putting it into the offset.
+        if (this.buffers.length > 0) {
+            this.offset += this.skippedLength;
+            this.skippedLength = 0;
+        }
     }
 
     assure(length : number) : Promise<void> {
@@ -123,7 +167,7 @@ export class BitstreamReader {
     read(length : number) : Promise<number> {
         this.ensureNoReadPending();
         
-        if (this.bufferedLength >= length) {
+        if (this.available >= length) {
             return Promise.resolve(this.readSync(length));
         } else {
             let request : BitstreamRequest = { resolve: null, length, peek: false };
@@ -131,6 +175,11 @@ export class BitstreamReader {
             this.blockedRequest = request;
             return promise;
         }
+    }
+
+    async peek(length : number): Promise<number> {
+        await this.assure(length);
+        return this.peekSync(length);
     }
 
     unread(buffer : Buffer) {
@@ -141,7 +190,7 @@ export class BitstreamReader {
         this.buffers.push(buffer);
         this.bufferedLength += buffer.length * 8;
 
-        if (this.blockedRequest && this.blockedRequest.length <= this.bufferedLength) {
+        if (this.blockedRequest && this.blockedRequest.length <= this.available) {
             let request = this.blockedRequest;
             this.blockedRequest = null;
 

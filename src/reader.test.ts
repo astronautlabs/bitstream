@@ -81,4 +81,63 @@ describe('BitstreamReader', it => {
         let str = bitstream.readStringSync(5, { nullTerminated: false });
         expect(str).to.equal('hi\u0000\u0000\u0000');
     });
+
+    it('correctly handles intra-byte skips', () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(Buffer.from([ 0b11001010, 0b01010100 ]));
+        bitstream.addBuffer(Buffer.from([ 0b11101001, 0b01100100, 0b10001110 ]));
+
+        expect(bitstream.readSync(1)).to.equal(0b1);
+        expect(bitstream.readSync(3)).to.equal(0b100);
+        bitstream.skip(1);
+        expect(bitstream.readSync(3)).to.equal(0b010);
+
+        bitstream.skip(2);
+        expect(bitstream.readSync(5)).to.equal(0b01010);
+        expect(bitstream.readSync(2)).to.equal(0b01);
+
+        bitstream.skip(1);
+        expect(bitstream.readSync(6)).to.equal(0b101001);
+
+        expect(bitstream.readSync(10)).to.equal(0b0110010010);
+        bitstream.skip(1);
+        expect(bitstream.readSync(5)).to.equal(0b01110);
+    });
+    it('correctly handles inter-byte skips', () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(Buffer.from([ 0b11001010, 0b01010100 ]));
+        bitstream.addBuffer(Buffer.from([ 0b11101001, 0b01100100, 0b10001110 ]));
+
+        expect(bitstream.readSync(1)).to.equal(0b1);
+        expect(bitstream.readSync(3)).to.equal(0b100);
+        bitstream.skip(1);
+        expect(bitstream.readSync(1)).to.equal(0b0);
+
+        bitstream.skip(4);
+        expect(bitstream.readSync(5)).to.equal(0b01010);
+        expect(bitstream.readSync(2)).to.equal(0b01);
+
+        bitstream.skip(1);
+        expect(bitstream.readSync(6)).to.equal(0b101001);
+
+        expect(bitstream.readSync(10)).to.equal(0b0110010010);
+        bitstream.skip(1);
+        expect(bitstream.readSync(5)).to.equal(0b01110);
+    });
+    it('correctly handles large inter-byte skips', () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(Buffer.from([ 0b11001010, 0b01010100 ]));
+        bitstream.addBuffer(Buffer.from([ 0b11101001, 0b01100100, 0b10001110 ]));
+
+        expect(bitstream.readSync(1)).to.equal(0b1);
+        expect(bitstream.readSync(3)).to.equal(0b100);
+        bitstream.skip(14);
+        expect(bitstream.readSync(6)).to.equal(0b101001);
+        expect(bitstream.readSync(10)).to.equal(0b0110010010);
+        bitstream.skip(1);
+        expect(bitstream.readSync(5)).to.equal(0b01110);
+    });
 });
