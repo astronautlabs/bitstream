@@ -254,4 +254,4 @@ in how you handle advanced serialization.
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 This library is in heavy development. It is changing rapidly by the day. We highly recommend 
 you open an issue to discuss the work you want to do before you start working, or risk 
-inadvertently clashing with the existing roadmap. 
+inadvertently clashing with rapid changes being made to the codebase.
