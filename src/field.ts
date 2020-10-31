@@ -39,9 +39,15 @@ export class BooleanSerializer implements Serializer {
 
 export class ArraySerializer implements Serializer {
     async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
-        let count = await reader.read(field.options.array.countFieldLength);
+        let count = 0;
         let elements = [];
-    
+
+        if (field.options.array.countFieldLength) {
+            count = await reader.read(field.options.array.countFieldLength);
+        } else if (field.options.array.count) {
+            count = resolveLength(field.options.array.count, instance, field);
+        }
+
         if (field.options.array.type === Number) {
             // Array of numbers. Useful when the array holds a single number field, but the 
             // bit length of the element fields is not 8 (where you would probably use a single `Buffer` field instead).
@@ -63,16 +69,34 @@ export class ArraySerializer implements Serializer {
 
     write(writer: BitstreamWriter, field: FieldDefinition, value: any[], instance: any) {
         let length = value.length;
-        let countFieldLength = field.options.array.countFieldLength;
 
-        if (length >= Math.pow(2, countFieldLength)) {
-            length = Math.pow(2, countFieldLength) - 1;
+        if (field.options.array.countFieldLength) {
+            let countFieldLength = field.options.array.countFieldLength;
+
+            if (length >= Math.pow(2, countFieldLength)) {
+                length = Math.pow(2, countFieldLength) - 1;
+            }
+
+            writer.write(field.options.array.countFieldLength, value.length);
+        } else if (field.options.array.count) {
+            length = resolveLength(field.options.array.count, instance, field);
+            if (length > value.length) {
+                throw new Error(
+                    `${field.containingType.name}#${field.name}: ` 
+                    + `Array field's count determinant specified ${length} elements should be written ` 
+                    + `but array only contains ${value.length} elements. `
+                    + `Ensure that the value of the count determinant is compatible with the number of elements in ` 
+                    + `the provided array.`
+                );
+            }
         }
 
-        writer.write(field.options.array.countFieldLength, value.length);
-        
         for (let i = 0; i < length; ++i) {
-            value[i].write(writer);
+            if (field.options.array.type === Number) { 
+                writer.write(field.options.array.elementLength, value[i]);
+            } else {
+                value[i].write(writer);
+            }
         }
     }
 }
@@ -149,8 +173,15 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
                 throw new Error(`${containingType.name}#${field.name}: Array field must specify option array.type`);
             if (!(field.options.array?.type.prototype instanceof BitstreamElement) && field.options.array?.type !== Number)
                 throw new Error(`${containingType.name}#${field.name}: Array fields can only be used with types which inherit from BitstreamElement`);
-            if (typeof field.options.array?.countFieldLength !== 'number' || field.options.array?.countFieldLength <= 0)
-                throw new Error(`${containingType.name}#${field.name}: Invalid value provided for length of count field: ${field.options.array?.countFieldLength}`);
+            if (field.options.array?.countFieldLength) {
+                if (typeof field.options.array.countFieldLength !== 'number' || field.options.array.countFieldLength <= 0)
+                    throw new Error(`${containingType.name}#${field.name}: Invalid value provided for length of count field: ${field.options.array.countFieldLength}. Must be a positive number.`);
+            }
+
+            if (field.options.array?.count) {
+                if (typeof field.options.array.count !== 'number' && typeof field.options.array.count !== 'function')
+                    throw new Error(`${containingType.name}#${field.name}: Invalid value provided for count determinant: ${field.options.array.count}. Must be a number or function`);
+            }
         }
 
         if (!options.serializer) {

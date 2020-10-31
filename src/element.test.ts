@@ -263,6 +263,39 @@ describe('BitstreamElement', it => {
         expect(element.items[1]).to.equal(0b1001100101);
         expect(element.items[2]).to.equal(0b1011001110);
     });
+    it('should understand a static count determinant', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) before;
+            @Field(0, { array: { type: Number, count: 3, elementLength: 10 } }) items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 123, 0b10011001, 0b10100110, 0b01011011, 0b00111010, 0b10111001 ]));
+
+        let element = await CustomElement.read(bitstream);
+
+        expect(element.before).to.equal(123);
+        expect(element.items.length).to.equal(3);
+        expect(element.items[0]).to.equal(0b1001100110);
+        expect(element.items[1]).to.equal(0b1001100101);
+        expect(element.items[2]).to.equal(0b1011001110);
+    });
+    it('should understand a dynamic count determinant', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) count;
+            @Field(8) before;
+            @Field(0, { array: { type: Number, count: i => i.count, elementLength: 10 } }) items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 3, 123, 0b10011001, 0b10100110, 0b01011011, 0b00111010, 0b10111001 ]));
+
+        let element = await CustomElement.read(bitstream);
+
+        expect(element.before).to.equal(123);
+        expect(element.items.length).to.equal(3);
+        expect(element.items[0]).to.equal(0b1001100110);
+        expect(element.items[1]).to.equal(0b1001100101);
+        expect(element.items[2]).to.equal(0b1011001110);
+    });
     it('should throw when array is used without specifying type', () => {
         
         let caught;
