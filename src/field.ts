@@ -42,12 +42,22 @@ export class ArraySerializer implements Serializer {
         let count = await reader.read(field.options.array.countFieldLength);
         let elements = [];
     
-        for (let i = 0; i < count; ++i) {
-            let element : BitstreamElement = new (field.options.array.type as any)();
-            await element.read(reader);
-            elements.push(element);
+        if (field.options.array.type === Number) {
+            // Array of numbers. Useful when the array holds a single number field, but the 
+            // bit length of the element fields is not 8 (where you would probably use a single `Buffer` field instead).
+            // For instance, in somes IETF RFCs 10 bit words are used instead of 8 bit words (ie bytes).
+            for (let i = 0; i < count; ++i) {
+                let elementLength = field.options.array.elementLength;
+                elements.push(await reader.read(elementLength));
+            }
+        } else {
+            for (let i = 0; i < count; ++i) {
+                let element : BitstreamElement = new (field.options.array.type as any)();
+                await element.read(reader);
+                elements.push(element);
+            }
         }
-    
+
         return elements;
     }
 
@@ -137,7 +147,7 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
         if (field.type === Array) {
             if (!field.options.array?.type)
                 throw new Error(`${containingType.name}#${field.name}: Array field must specify option array.type`);
-            if (!(field.options.array?.type.prototype instanceof BitstreamElement))
+            if (!(field.options.array?.type.prototype instanceof BitstreamElement) && field.options.array?.type !== Number)
                 throw new Error(`${containingType.name}#${field.name}: Array fields can only be used with types which inherit from BitstreamElement`);
             if (typeof field.options.array?.countFieldLength !== 'number' || field.options.array?.countFieldLength <= 0)
                 throw new Error(`${containingType.name}#${field.name}: Invalid value provided for length of count field: ${field.options.array?.countFieldLength}`);
