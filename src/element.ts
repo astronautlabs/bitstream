@@ -5,7 +5,13 @@ import { BitstreamWriter } from "./writer";
 
 export class BitstreamElement {
     static get syntax() : FieldDefinition[] {
-        return (Object.getPrototypeOf(this).syntax || []).concat(this.ownSyntax || []);
+
+        let self : Object = this;
+        let ownSyntax = [];
+        if (self.hasOwnProperty('ownSyntax'))
+            ownSyntax = this.ownSyntax;
+
+        return (Object.getPrototypeOf(this).syntax || []).concat(ownSyntax || []);
     }
 
     static ownSyntax : FieldDefinition[];
