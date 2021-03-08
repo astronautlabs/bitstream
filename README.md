@@ -249,6 +249,12 @@ Here, we are passing a previously decoded element into the `deserializeFrom()` o
 being deserialized. You could pass any arbitrary data in this fashion, giving you flexibility 
 in how you handle advanced serialization.
 
+# Debugging Element Serialization
+
+It can be tricky to know where your app gets stuck reading a Bitstream Element. If you set `globalThis.BITSTREAM_TRACE = true`
+then Bitstream will begin outputting some trace messages to help you understand what field your app got stuck on while 
+reading. This can be very helpful when your protocol descriptions have too many bits.
+
 # Contributing
 
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).

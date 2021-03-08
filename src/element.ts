@@ -23,12 +23,28 @@ export class BitstreamElement {
     protected async readGroup(bitstream : BitstreamReader, name : string) {
         let syntax = this.syntax;
 
+        if (globalThis.BITSTREAM_TRACE === true)
+            console.log(`[readGroup] ${this.constructor.name}, name=${name}`);
+        
         for (let element of syntax) {
             if (name !== '*' && element.options.group !== name)
                 continue;
-            
+        
+            let traceTimeout;
+            if (globalThis.BITSTREAM_TRACE === true) {
+                traceTimeout = setTimeout(() => {
+                    console.log(`Stuck reading ${element.containingType.name}#${element.name}`);
+                }, 5000);
+            }
+
             try {
+                if (globalThis.BITSTREAM_TRACE === true)
+                    console.log(` - ${element.containingType.name}#${element.name}`);
                 this[element.name] = await element.options.serializer.read(bitstream, element, this);
+                if (globalThis.BITSTREAM_TRACE === true) {
+                    console.log(`   => ${this[element.name]} [${element.containingType.name}#${element.name}]`);
+                    clearTimeout(traceTimeout);
+                }
             } catch (thrown) {
                 let e : Error = thrown;
                 if (e.message.startsWith('underrun:')) {
