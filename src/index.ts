@@ -5,3 +5,6 @@ export * from './syntax-element';
 export * from './field-options';
 export * from './field';
 export * from './constructor';
+export * from './discriminant';
+export * from './deserializer';
+export * from './variant';

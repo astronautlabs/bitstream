@@ -90,7 +90,7 @@ export class BitstreamReader {
     private readCoreSync(length : number, consume : boolean): number {
         this.ensureNoReadPending();
         
-        let value = 0;
+        let value : bigint = BigInt(0);
         let remainingLength = length;
 
         if (this.available < length)
@@ -101,26 +101,36 @@ export class BitstreamReader {
         let offset = this.offset;
         let bufferIndex = 0;
 
+        //console.log(`Reading number of ${remainingLength} bits (initial byteOffset=${offset}, bitOffset=${offset % 8})...`);
+
+        let bitLength = 0;
+
         while (remainingLength > 0) {
             let buffer = this.buffers[bufferIndex];
-            let byte = buffer[Math.floor(offset / 8)];
+            let byte = BigInt(buffer[Math.floor(offset / 8)]);
             
             let bitOffset = offset % 8;
             let bitContribution = Math.min(8 - bitOffset, remainingLength);
             let mask = Math.pow(0x2, bitContribution) - 1;
             
-            value = (value << bitContribution) | ((byte >> (8 - bitContribution - bitOffset)) & mask);
+            //console.log(` - Taking ${bitContribution} bits from current byte: 0b${((byte >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) & BigInt(mask)).toString(2)}`);
+            //console.log(` - Making space for ${bitContribution} bits: 0b${(value << BigInt(bitContribution)).toString(2)}`);
+            value = (value << BigInt(bitContribution)) | ((byte >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) & BigInt(mask));
+            //console.log(` - Value is now: 0b${value.toString(2)}`);
 
             // update counters
 
             offset += bitContribution;
             remainingLength -= bitContribution;
+            bitLength += bitContribution;
 
             if (offset >= buffer.length*8) {
                 bufferIndex += 1;
                 offset = 0;
             }
         }
+
+        //console.log(` - Final value: 0b${value.toString(2)}`);
         
         if (consume) {
             this.buffers.splice(0, bufferIndex);
@@ -128,7 +138,7 @@ export class BitstreamReader {
             this.offset = offset;
         }
 
-        return value;
+        return Number(value);
     }
 
     private adjustSkip() {

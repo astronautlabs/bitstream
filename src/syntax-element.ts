@@ -3,7 +3,7 @@ import { FieldOptions } from "./field-options";
 
 export interface FieldDefinition {
     length : LengthDeterminant;
-    name : string;
+    name : string | symbol;
     containingType : Function;
     type : Function;
     options : FieldOptions;

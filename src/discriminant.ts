@@ -1,0 +1,1 @@
+export type Discriminant<T = any, U = any> = (element : T, parent? : U) => boolean;

@@ -1,73 +1,167 @@
 import { BitstreamElement } from "./element";
-import { Deserializer, FieldOptions } from "./field-options";
+import { FieldOptions } from "./field-options";
 import { BitstreamReader } from "./reader";
 import { Serializer } from "./serializer";
 import { FieldDefinition } from "./syntax-element";
+import { VariantDefinition } from "./variant";
 import { BitstreamWriter } from "./writer";
 
-export function resolveLength(determinant : LengthDeterminant, instance : any, field : FieldDefinition) {
+export function resolveLength(determinant : LengthDeterminant, parent : BitstreamElement, field : FieldDefinition) {
     if (typeof determinant === 'number')
         return determinant;
 
-    let length = determinant(instance, field);
+    if (!parent)
+        throw new Error(`Cannot resolve length without an instance!`);
+    
+    let length = parent.runWithFieldBeingComputed(field, () => determinant(parent, field));
 
     if (typeof length !== 'number')
-        throw new Error(`Length determinant for field ${field.containingType.name}#${field.name} returned non-number value: ${length}`);
+        throw new Error(`${field.containingType.name}#${String(field.name)}: Length determinant returned non-number value: ${length}`);
+
+    if (length < 0) {
+        let message = `${field.containingType.name}#${String(field.name)}: Length determinant returned negative value ${length} -- Value read so far: ${JSON.stringify(parent, undefined, 2)}`;
+
+        console.error(message);
+        console.error(`============= Item =============`);
+        console.dir(parent);
+        let debugParent = parent.parent;
+        while (debugParent) {
+            console.error(`============= Parent =============`);
+            console.dir(debugParent);
+            debugParent = debugParent.parent;
+        }
+
+        throw new Error(message);
+    }
 
     return length;
 }
 
 export class NumberSerializer implements Serializer {
-    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
-        return await reader.read(resolveLength(field.length, instance, field));
+    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+        let length : number;
+        try {
+            length = resolveLength(field.length, parent, field);
+        } catch (e) {
+            throw new Error(`Failed to resolve length of number via 'length' determinant: ${e.message}`);
+        }
+
+        return await reader.read(length);
     }
 
-    write(writer: BitstreamWriter, field: FieldDefinition, value: any, instance: any) {
-        writer.write(resolveLength(field.length, instance, field), value);
+    write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
+        let length : number;
+        try {
+            length = resolveLength(field.length, instance, field);
+        } catch (e) {
+            throw new Error(`Failed to resolve length of number via 'length' determinant: ${e.message}`);
+        }
+
+        writer.write(length, value);
     }
 }
 
 export class BooleanSerializer implements Serializer {
-    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
-        return await reader.read(resolveLength(field.length, instance, field)) !== 0;
+    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+        return await reader.read(resolveLength(field.length, parent, field)) !== 0;
     }
 
-    write(writer: BitstreamWriter, field: FieldDefinition, value: any, instance: any) {
+    write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
         writer.write(resolveLength(field.length, instance, field), value ? 1 : 0);
     }
 }
 
 export class ArraySerializer implements Serializer {
-    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
+    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         let count = 0;
         let elements = [];
 
         if (field.options.array.countFieldLength) {
             count = await reader.read(field.options.array.countFieldLength);
         } else if (field.options.array.count) {
-            count = resolveLength(field.options.array.count, instance, field);
+            count = resolveLength(field.options.array.count, parent, field);
+        }
+
+        if (parent) {
+            parent.readFields.push(field.name);
+            parent[field.name] = [];
         }
 
         if (field.options.array.type === Number) {
             // Array of numbers. Useful when the array holds a single number field, but the 
             // bit length of the element fields is not 8 (where you would probably use a single `Buffer` field instead).
             // For instance, in somes IETF RFCs 10 bit words are used instead of 8 bit words (ie bytes).
-            for (let i = 0; i < count; ++i) {
-                let elementLength = field.options.array.elementLength;
-                elements.push(await reader.read(elementLength));
+
+            if (field.options.array.hasMore) {
+                    do {
+                        let continued : boolean;
+                        
+                        try {
+                            parent.runWithFieldBeingComputed(field, () => 
+                                continued = field.options.array.hasMore(parent, parent.parent), true);
+                        } catch (e) {
+                            throw new Error(`${parent?.constructor.name || '<none>'}#${String(field?.name || '<none>')} Failed to determine if array has more items via 'hasMore' discriminant: ${e.message}`);
+                        }
+
+                        if (!continued)
+                            break;
+
+                        let elementLength = field.options.array.elementLength;
+                        elements.push(await reader.read(elementLength));
+                    } while (true);
+            } else {
+                for (let i = 0; i < count; ++i) {
+                    let elementLength = field.options.array.elementLength;
+                    elements.push(await reader.read(elementLength));
+                }
             }
         } else {
-            for (let i = 0; i < count; ++i) {
-                let element : BitstreamElement = new (field.options.array.type as any)();
-                await element.read(reader);
-                elements.push(element);
+            //console.log(`Reading array of ${field.options.array.type.name}, size ${count}`);
+            if (field.options.array.hasMore) {
+                let i = 0;
+                do {
+                    let continued : boolean;
+                    
+                    try {
+                        parent.runWithFieldBeingComputed(field, () => 
+                            continued = field.options.array.hasMore(parent, parent.parent), true);
+                    } catch (e) {
+                        throw new Error(`${parent?.constructor.name || '<none>'}#${String(field?.name || '<none>')} Failed to determine if array has more items via 'hasMore' discriminant: ${e.message}`);
+                    }
+
+                    if (!continued)
+                        break;
+
+                    let element : BitstreamElement;
+                    let serializer = new StructureSerializer();
+
+                    //console.log(`Reading index ${i++} of array...`);
+                    element = await serializer.read(reader, field.options.array.type, parent, field);
+                    elements.push(element);
+                    parent[field.name].push(element);
+
+                } while (true);
+            } else {
+                for (let i = 0; i < count; ++i) {
+                    let element : BitstreamElement;
+                    let serializer = new StructureSerializer();
+
+                    //console.log(`Reading index ${i} of array...`);
+                    element = await serializer.read(reader, field.options.array.type, parent, field);
+                    elements.push(element);
+                    parent[field.name].push(element);
+                }
             }
         }
 
         return elements;
     }
+    
+    write(writer : BitstreamWriter, type : any, parent : BitstreamElement, field : FieldDefinition, value : any[]) {
+        if (!value) {
+            throw new Error(`${parent?.constructor.name || '<none>'}#${String(field?.name) || '<none>'}: Cannot serialize a null array!`);
+        }
 
-    write(writer: BitstreamWriter, field: FieldDefinition, value: any[], instance: any) {
         let length = value.length;
 
         if (field.options.array.countFieldLength) {
@@ -79,10 +173,15 @@ export class ArraySerializer implements Serializer {
 
             writer.write(field.options.array.countFieldLength, value.length);
         } else if (field.options.array.count) {
-            length = resolveLength(field.options.array.count, instance, field);
+            try {
+                length = resolveLength(field.options.array.count, parent, field);
+            } catch (e) {
+                throw new Error(`Failed to resolve length for array via 'count': ${e.message}`);
+            }
+
             if (length > value.length) {
                 throw new Error(
-                    `${field.containingType.name}#${field.name}: ` 
+                    `${field.containingType.name}#${String(field.name)}: ` 
                     + `Array field's count determinant specified ${length} elements should be written ` 
                     + `but array only contains ${value.length} elements. `
                     + `Ensure that the value of the count determinant is compatible with the number of elements in ` 
@@ -102,18 +201,34 @@ export class ArraySerializer implements Serializer {
 }
 
 export class BufferSerializer implements Serializer {
-    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
-        let buffer = Buffer.alloc(resolveLength(field.length, instance, field) / 8);
+    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+        let length : number;
+        
+        try {
+            length = resolveLength(field.length, parent, field) / 8;
+        } catch (e) {
+            throw new Error(`Failed to resolve length for buffer via 'length': ${e.message}`);
+        }
+        
+        let buffer = Buffer.alloc(length);
         for (let i = 0, max = buffer.length; i < max; ++i)
             buffer[i] = await reader.read(8);
         return buffer;
     }
 
-    write(writer: BitstreamWriter, field: FieldDefinition, value: Buffer, instance: any) {
-        let fieldLength = Math.floor(resolveLength(field.length, instance, field) / 8);
+    write(writer: BitstreamWriter, type : any, parent : BitstreamElement, field: FieldDefinition, value: Buffer) {
+        let length : number;
+
+        try {
+            length = resolveLength(field.length, parent, field) / 8
+        } catch (e) {
+            throw new Error(`Failed to resolve length for buffer via 'length': ${e.message}`);
+        }
+
+        let fieldLength = Math.floor(length);
 
         if (value.length > fieldLength) {
-            writer.writeBuffer(value.subarray(0, resolveLength(field.length, instance, field)));
+            writer.writeBuffer(value.subarray(0, resolveLength(field.length, parent, field)));
         } else {
             writer.writeBuffer(value);
             if (value.length < fieldLength)
@@ -123,34 +238,108 @@ export class BufferSerializer implements Serializer {
 }
 
 export class StringSerializer implements Serializer {
-    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
-        return await reader.readString(resolveLength(field.length, instance, field), field.options.string);
+    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+        return await reader.readString(resolveLength(field.length, parent, field), field.options.string);
     }
 
-    write(writer: BitstreamWriter, field: FieldDefinition, value: string, instance: any) {
-        writer.writeString(resolveLength(field.length, instance, field), `${value}`, field?.options?.string?.encoding || 'utf-8');
+    write(writer : BitstreamWriter, type : any, parent : BitstreamElement, field : FieldDefinition, value : any) {
+        let length : number;
+        try {
+            length = resolveLength(field.length, parent, field);
+        } catch (e) {
+            throw new Error(`Failed to resolve length of string via 'length' determinant: ${e.message}`);
+        }
+
+        writer.writeString(length, `${value}`, field?.options?.string?.encoding || 'utf-8');
     }
 }
 
 export class StructureSerializer implements Serializer {
-    async read(reader: BitstreamReader, field: FieldDefinition, instance: any) {
-        let element : BitstreamElement = new (field.type as any)();
-        await element.read(reader);
+    async read(reader: BitstreamReader, type : any, parent: BitstreamElement, defn : FieldDefinition, baseElement? : BitstreamElement) {
+        let element : BitstreamElement = new type();
+        element.parent = parent;
+
+        let parentStillReading = baseElement ? baseElement.isBeingRead : false;
+        element.isBeingRead = true;
+
+        let variator = async () => {
+            let elementType : any = element.constructor;
+            let variants : VariantDefinition[] = elementType.variants;
+            
+            if (defn && defn.options.variants) {
+                variants = defn.options.variants.map((typeOrVariant : any) => 
+                    typeof typeOrVariant === 'function' 
+                        ? (<VariantDefinition>{ type, discriminant: type.variantDiscriminant })
+                        : typeOrVariant
+                );
+            }
+
+            variants = variants.sort((a, b) => {
+                let aPriority = a.options.priority || 0;
+                let bPriority = b.options.priority || 0;
+
+                if (aPriority === 'first') aPriority = Number.MIN_SAFE_INTEGER;
+                if (aPriority === 'last') aPriority = Number.MAX_SAFE_INTEGER;
+                
+                if (bPriority === 'first') bPriority = Number.MIN_SAFE_INTEGER;
+                if (bPriority === 'last') bPriority = Number.MAX_SAFE_INTEGER;
+                
+                return aPriority - bPriority;
+            });
+
+            if (variants) {
+                let match = variants.find(v => v.discriminant(element, parent));
+                if (match) {
+                    //console.log(`[::] ${element.constructor.name} into ${match.type.name}`);
+                    return element = await this.read(reader, match.type, parent, defn, element);
+                }
+            }
+
+            //console.log(`No matching variants found out of ${variants.length} options.`);
+            return element;
+        };
+
+        if (baseElement) {
+            //console.log(`Copying pre-parsed values into ${element.constructor.name} from ${baseElement.constructor.name}...`);
+            element.syntax.forEach(f => {
+                if (baseElement.syntax.some(x => x.name === f.name) && baseElement.readFields.includes(f.name)) {
+                    element[f.name] = baseElement[f.name];
+                    element.readFields.push(f.name);
+                }
+            });
+
+            //console.log(`Reading own values of ${element.constructor.name}`);
+            await element.readOwn(reader, variator);
+        } else {
+            //console.log(`Reading values of ${element.constructor.name}`);
+            await element.read(reader, variator);
+        }
+
+        if (globalThis.BITSTREAM_TRACE)
+            console.log(`Done reading ${element.constructor.name}, isBeingRead=${parentStillReading}`);
+        element.isBeingRead = parentStillReading;
+
+        if (!element.ownSyntax.some(x => x.options.isVariantMarker)) {
+            if (globalThis.BITSTREAM_TRACE)
+                console.log(`** Variating ${element.constructor.name}`);
+            element = await variator();
+        }
+        
         return element;
     }
 
-    write(writer: BitstreamWriter, field: FieldDefinition, value: BitstreamElement, instance: any) {
-        value.write(writer);
+    async write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
+        await value.write(writer);
     }
 }
 
-export type LengthDeterminant = number | ((any, BitstreamSyntaxElement) => number);
+export type LengthDeterminant = number | ((instance : any, f : FieldDefinition) => number);
 
 export function Field(length? : LengthDeterminant, options? : FieldOptions) {
     if (!options)
         options = {};
     
-    return (target : any, fieldName : string) => {
+    return (target : any, fieldName : string | symbol) => {
         let containingType = target.constructor;
 
         if (!(containingType as Object).hasOwnProperty('ownSyntax')) {
@@ -166,21 +355,21 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
         }
 
         if (field.type === Buffer && typeof field.length === 'number' && field.length % 8 !== 0)
-            throw new Error(`${containingType.name}#${field.name}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
+            throw new Error(`${containingType.name}#${String(field.name)}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
 
         if (field.type === Array) {
             if (!field.options.array?.type)
-                throw new Error(`${containingType.name}#${field.name}: Array field must specify option array.type`);
+                throw new Error(`${containingType.name}#${String(field.name)}: Array field must specify option array.type`);
             if (!(field.options.array?.type.prototype instanceof BitstreamElement) && field.options.array?.type !== Number)
-                throw new Error(`${containingType.name}#${field.name}: Array fields can only be used with types which inherit from BitstreamElement`);
+                throw new Error(`${containingType.name}#${String(field.name)}: Array fields can only be used with types which inherit from BitstreamElement`);
             if (field.options.array?.countFieldLength) {
                 if (typeof field.options.array.countFieldLength !== 'number' || field.options.array.countFieldLength <= 0)
-                    throw new Error(`${containingType.name}#${field.name}: Invalid value provided for length of count field: ${field.options.array.countFieldLength}. Must be a positive number.`);
+                    throw new Error(`${containingType.name}#${String(field.name)}: Invalid value provided for length of count field: ${field.options.array.countFieldLength}. Must be a positive number.`);
             }
 
             if (field.options.array?.count) {
                 if (typeof field.options.array.count !== 'number' && typeof field.options.array.count !== 'function')
-                    throw new Error(`${containingType.name}#${field.name}: Invalid value provided for count determinant: ${field.options.array.count}. Must be a number or function`);
+                    throw new Error(`${containingType.name}#${String(field.name)}: Invalid value provided for count determinant: ${field.options.array.count}. Must be a number or function`);
             }
         }
 
@@ -195,12 +384,12 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
                 options.serializer = new BufferSerializer();
             else if (field.type === String)
                 options.serializer = new StringSerializer();
-            else if (field.type.prototype instanceof BitstreamElement)
+            else if (field.type?.prototype instanceof BitstreamElement)
                 options.serializer = new StructureSerializer();
             else if (field.type === Array)
                 options.serializer = new ArraySerializer();
             else
-                throw new Error(`No serializer available for field ${field.name} with type ${field.type.name}`);
+                throw new Error(`${containingType.name}#${String(field.name)}: No serializer available for type ${field.type?.name || '<unknown>'}`);
         }
 
         (<FieldDefinition[]>containingType.ownSyntax).push(field);

@@ -1,57 +1,306 @@
 import { Constructor } from "./constructor";
+import { StructureSerializer } from "./field";
 import { BitstreamReader } from "./reader";
 import { FieldDefinition } from "./syntax-element";
-import { BitstreamWriter } from "./writer";
+import { VariantDefinition } from "./variant";
+import { BitstreamMeasurer, BitstreamWriter } from "./writer";
+
+export type FieldRef<T> = string | symbol | ((exemplar : {
+    [P in keyof T]: any;
+}) => any);
 
 export class BitstreamElement {
     static get syntax() : FieldDefinition[] {
+        let parentSyntax = (<FieldDefinition[]>(Object.getPrototypeOf(this).syntax || []));
+        let syntax = parentSyntax.slice();
+        let ownSyntax = (<Object>this).hasOwnProperty('ownSyntax') ? this.ownSyntax : [];
+        let insertIndex = syntax.findIndex(x => x.options.isVariantMarker);
 
-        let self : Object = this;
-        let ownSyntax = [];
-        if (self.hasOwnProperty('ownSyntax'))
-            ownSyntax = this.ownSyntax;
+        if (insertIndex >= 0)
+            syntax.splice(insertIndex, 0, ...ownSyntax);
+        else
+            syntax.push(...ownSyntax);
 
-        return (Object.getPrototypeOf(this).syntax || []).concat(ownSyntax || []);
+        return syntax;
     }
 
+    selectField(ref : FieldRef<this>) {
+        if (typeof ref === 'string' || typeof ref === 'symbol')
+            return this.syntax.find(x => x.name === ref);
+
+        let selector : Record<string, symbol> = this.syntax.reduce((pv, cv) => (pv[cv.name] = cv.name, pv), {});
+        let selected : string = ref(<any>selector);
+
+        return this.syntax.find(x => x.name === selected);
+    }
+
+    measure(fromRef? : FieldRef<this>, toRef? : FieldRef<this>) {
+        if (!fromRef)
+            fromRef = this.syntax[0].name;
+
+        if (!toRef) {
+            if (this.getFieldBeingComputed()) {
+                let toIndex = this.syntax.findIndex(f => f.name === this.getFieldBeingComputed().name);
+
+                if (!this.getFieldBeingComputedIntrospectable())
+                    toIndex -= 1;
+                
+                if (toIndex < 0)
+                    return 0;
+                
+                toRef = this.syntax[toIndex].name;
+            } else if (this.isBeingRead) {
+                //console.log(`${this.constructor.name}: Autodetermining last read field from ${JSON.stringify(this.readFields)}`);
+                let readFields = this.syntax.filter(x => this.readFields.includes(x.name)).map(x => x.name);
+                toRef = readFields[readFields.length - 1];
+                //console.log(`${this.constructor.name}: Selected ${String(readFields[readFields.length - 1])} as end of measure range`);
+            } else {
+                //console.log(`${this.constructor.name} is not being read, so grabbing last field`);
+                toRef = this.syntax[this.syntax.length - 1].name;
+            }
+        }
+
+        let from = this.selectField(fromRef);
+        let to = this.selectField(toRef);
+        let fieldBeingRead = this.syntax.find(x => !this.readFields.includes(x.name));
+
+        let fromIndex = this.syntax.findIndex(x => x === from);
+        let toIndex = this.syntax.findIndex(x => x === to);
+        let measurer = new BitstreamMeasurer();
+
+        if (fromIndex > toIndex) {
+            throw new Error(`Cannot measure from field ${fromIndex} (${String(from.name)}) to ${toIndex} (${String(to.name)}): First field comes after last field`);
+        }
+
+        //console.log(`Measuring from ${String(from.name)} [${fromIndex}] to ${String(to.name)} [${toIndex}]`);
+
+        for (let i = fromIndex, max = toIndex; i <= max; ++i) {
+            let field = this.syntax[i];
+
+            if (!this.isPresent(field, this))
+                continue;
+
+            try {
+                field.options.serializer.write(measurer, this.constructor, this, field, this[field.name]);
+            } catch (e) {
+                console.error(`Failed to measure field ${this.constructor.name}#${String(field.name)}:`);
+                console.error(e);
+                throw new Error(`${this.constructor.name}#${String(field.name)}: Cannot measure field: ${e.message}`);
+            }
+        }
+
+        //console.log(`${this.constructor.name}#${String(fieldBeingRead?.name) || '<none>'}: Measure('${String(from.name)}', '${String(to.name)}'): ${measurer.bitLength} bits`);
+        return measurer.bitLength;
+    }
+    
+    measureTo(toRef? : FieldRef<this>) {
+        return this.measure(undefined, toRef);
+    }
+
+    measureFrom(fromRef? : FieldRef<this>) {
+        return this.measure(fromRef, undefined);
+    }
+
+    measureField(ref? : FieldRef<this>) {
+        return this.measure(ref, ref);
+    }
+
+    as<T>(...typeChecks : Constructor<T>[]): T {
+        if (!typeChecks.some(x => this instanceof x))
+            throw new Error(`Tried to cast to one of [${typeChecks.map(x => x.name).join(', ')}], but ${this.constructor.name} does not inherit from any of them`);
+
+        return <any>this;
+    }
+
+    static get variants() : VariantDefinition[] {
+        return (<Object>this).hasOwnProperty('ownVariants') ? this.ownVariants : [];
+        // return (Object.getPrototypeOf(this).variants || [])
+        //     .concat((<Object>this).hasOwnProperty('ownVariants') ? this.ownVariants : [])
+        // ;
+    }
+
+    static ownVariants : VariantDefinition[];
     static ownSyntax : FieldDefinition[];
+
+    #parent : BitstreamElement;
+
+    get parent() {
+        return this.#parent;
+    }
+
+    set parent(value) {
+        this.#parent = value;
+    }
+
+    #readFields : (string | symbol)[] = [];
+    #isBeingRead : boolean;
+
+    get isBeingRead() {
+        return this.#isBeingRead;
+    }
+
+    set isBeingRead(value : boolean) {
+        this.#isBeingRead = value;
+    }
+
+    get readFields() {
+        return this.#readFields;
+    }
+
+    #fieldBeingComputed : FieldDefinition;
+    #fieldBeingComputedIntrospectable : boolean;
+
+    getFieldBeingComputedIntrospectable() {
+        return this.#fieldBeingComputedIntrospectable;
+    }
+
+    getFieldBeingComputed() {
+        return this.#fieldBeingComputed;
+    }
+
+    toJSON() {
+        return this.syntax
+            .map(s => [s.name, this[s.name]])
+            .reduce((pv, [k, v]) => (pv[k] = v, pv), {});
+    }
+
+    runWithFieldBeingComputed<T>(field : FieldDefinition, callback : () => T, introspectable? : boolean) {
+        let before = this.getFieldBeingComputed();
+        let beforeIntrospectable = this.getFieldBeingComputedIntrospectable();
+        try {
+            this.#fieldBeingComputed = field;
+            this.#fieldBeingComputedIntrospectable = introspectable;
+            return callback();
+        } finally { 
+            this.#fieldBeingComputed = before;
+            this.#fieldBeingComputedIntrospectable = beforeIntrospectable;
+        }
+    }
 
     get syntax() : FieldDefinition[] {
         return (this.constructor as any).syntax;
     }
 
-    protected async readGroup(bitstream : BitstreamReader, name : string) {
-        let syntax = this.syntax;
+    get ownSyntax() : FieldDefinition[] {
+        return (this.constructor as any).ownSyntax;
+    }
 
-        if (globalThis.BITSTREAM_TRACE === true)
-            console.log(`[readGroup] ${this.constructor.name}, name=${name}`);
+    private leftPad(num : number | string, digits : number = 4) {
+        let str = `${num}`;
+        while (str.length < digits)
+            str = ` ${str}`;
+        return str;
+    }
+
+    private rightPad(num : number | string, digits : number = 4) {
+        let str = `${num}`;
+        while (str.length < digits)
+            str = `${str} `;
+        return str;
+    }
+
+    private zeroPad(num : number | string, digits : number = 4) {
+        let str = `${num}`;
+        while (str.length < digits)
+            str = `0${str}`;
+        return str;
+    }
+
+    private isPresent(element : FieldDefinition, instance : this) {
+        if (element.options.presentWhen) {
+            if (!instance.runWithFieldBeingComputed(element, () => element.options.presentWhen(instance))) {
+                //console.log(`${this.constructor.name}#${String(element.name)}: Skipping field [presentWhen failed]`);
+                return false;
+            }
+        }
+
+        if (element.options.excludedWhen) {
+            if (instance.runWithFieldBeingComputed(element, () => element.options.excludedWhen(instance))) {
+                //console.log(`${this.constructor.name}#${String(element.name)}: Skipping field [excludedWhen passed]`);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected async readGroup(bitstream : BitstreamReader, name : string, variator : () => Promise<this>) {
+        let syntax : FieldDefinition[];
         
+        if (name === '*') { // all my fields
+            syntax = this.syntax;
+        } else if (name === '$*') { // all my own fields
+            syntax = this.ownSyntax;
+        } else if (name.startsWith('$')) { // my own fields in group $<group>
+            // if (name !== '*' && element.options.group !== name)
+            let group = name.slice(1);
+            syntax = this.ownSyntax.filter(x => x.options.group === group);
+        } else { // all my fields in group <group>
+            syntax = this.ownSyntax.filter(x => x.options.group === name);
+        }
+
+        let instance = this;
+
         for (let element of syntax) {
-            if (name !== '*' && element.options.group !== name)
+
+            // Preconditions 
+
+            if (!this.isPresent(element, instance))
                 continue;
-        
+                
+            if (element.options.isVariantMarker && variator) {
+                if (globalThis.BITSTREAM_TRACE)
+                    console.log(`Variating at marker...`);
+                instance = await variator();
+                if (!instance)
+                    throw new Error(`Variator did not return a value!`);
+                
+                continue;
+            }
+
+            // Parsing 
+
             let traceTimeout;
             if (globalThis.BITSTREAM_TRACE === true) {
                 traceTimeout = setTimeout(() => {
-                    console.log(`Stuck reading ${element.containingType.name}#${element.name}`);
+                    console.log(`[!!] ${element.containingType.name}#${String(element.name)}: Stuck reading!`);
                 }, 5000);
             }
 
             try {
-                if (globalThis.BITSTREAM_TRACE === true)
-                    console.log(` - ${element.containingType.name}#${element.name}`);
-                this[element.name] = await element.options.serializer.read(bitstream, element, this);
+                instance[element.name] = await element.options.serializer.read(bitstream, element.type, instance, element);
+                instance.readFields.push(element.name);
+
                 if (globalThis.BITSTREAM_TRACE === true) {
-                    console.log(`   => ${this[element.name]} [${element.containingType.name}#${element.name}]`);
+                    try {
+                        console.log(
+                            `[ + ${
+                                this.leftPad(instance.measureField(element.name), 4)
+                                } bit(s) = ${
+                                    this.leftPad(Math.floor(instance.measureTo(element.name) / 8), 4)
+                                } byte(s), ${
+                                    this.leftPad(
+                                        instance.measureTo(element.name)
+                                        - Math.floor(instance.measureTo(element.name) / 8)*8
+                                    , 4)
+                                } bits = ${this.leftPad(instance.measureTo(element.name), 4)} bits total] `
+                            + 
+                            `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} => ${instance[element.name]}`
+                        );
+                    } catch (e) {
+                        console.log(`Error while tracing read operation for element ${String(element.name)}: ${e.message}`);
+                        console.error(e);
+                    }
+
                     clearTimeout(traceTimeout);
                 }
             } catch (thrown) {
                 let e : Error = thrown;
                 if (e.message.startsWith('underrun:')) {
                     throw new Error(
-                        `Ran out of bits while deserializing field ${element.name} ` 
+                        `Ran out of bits while deserializing field ${String(element.name)} ` 
                         + `in group '${name}' ` 
-                        + `of element ${this.constructor.name}`
+                        + `of element ${instance.constructor.name}`
                     );
                 } else {
                     throw e;
@@ -66,18 +315,25 @@ export class BitstreamElement {
             if (name !== '*' && element.options.group !== name)
                 continue;
             
-            element.options.serializer.write(bitstream, element, this[element.name], this);
+            // Preconditions 
+
+            if (!this.isPresent(element, this))
+                continue;
+
+            element.options.serializer.write(bitstream, element.type, this, element, this[element.name]);
         }
     }
 
-    async read(bitstream : BitstreamReader) {
-        await this.readGroup(bitstream, '*');
+    async read(bitstream : BitstreamReader, variator? : () => Promise<this>) {
+        await this.readGroup(bitstream, '*', variator);
     }
 
-    static async read<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader) : Promise<T> {
-        let instance = new this();
-        await instance.read(bitstream);
-        return instance;
+    async readOwn(bitstream : BitstreamReader, variator? : () => Promise<this>) {
+        await this.readGroup(bitstream, '$*', variator);
+    }
+
+    static async read<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader, parent? : BitstreamElement) : Promise<T> {
+        return <any> await new StructureSerializer().read(bitstream, this, null, null);
     }
 
     async write(bitstream : BitstreamWriter) {

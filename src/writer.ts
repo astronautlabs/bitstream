@@ -51,3 +51,24 @@ export class BitstreamWriter {
         }
     }
 }
+
+export class BitstreamMeasurer extends BitstreamWriter {
+    constructor() {
+        super(null, 1);
+    }
+
+    bitLength = 0;
+
+    writeString(byteCount : number, value : string, encoding : string = 'utf-8') {
+        this.bitLength += byteCount * 8;
+    }
+
+    writeBuffer(buffer : Buffer) {
+        this.bitLength += buffer.length * 8;
+    }
+
+    write(length : number, value : number) {
+        this.bitLength += length;
+    }
+}
+
