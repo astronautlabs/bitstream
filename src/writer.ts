@@ -5,7 +5,7 @@ export class BitstreamWriter {
         this.buffer = Buffer.alloc(bufferSize);
     }
 
-    private pendingByte : number;
+    private pendingByte : bigint = BigInt(0);
     private pendingBits : number = 0;
     private buffer : Buffer;
     private bufferedBytes = 0;
@@ -21,26 +21,36 @@ export class BitstreamWriter {
             this.write(8, buffer[i]);
     }
 
-    write(length : number, value : number) {
-        value = value % Math.pow(2, length);
+    private min(a : bigint, b : bigint) {
+        if (a < b)
+            return a;
+        else
+            return b;
+    }
+
+    write(length : number, valueX : number) {
+        if (isNaN(valueX))
+            throw new Error(`Cannot write to bitstream: Value ${valueX} is not a number`);
+        
+        let valueN = BigInt(valueX % Math.pow(2, length));
         
         let remainingLength = length;
 
         while (remainingLength > 0) {
-            let shift = 8 - this.pendingBits - remainingLength;
-            let contribution = (shift >= 0 ? (value << shift) : (value >> -shift));
-            let writtenLength = shift >= 0 ? remainingLength : Math.min(-shift, 8 - this.pendingBits);
+            let shift = BigInt(8 - this.pendingBits - remainingLength);
+            let contribution = (shift >= 0 ? (valueN << shift) : (valueN >> -shift));
+            let writtenLength = Number(shift >= 0 ? remainingLength : this.min(-shift, BigInt(8 - this.pendingBits)));
 
             this.pendingByte = this.pendingByte | contribution;
             this.pendingBits += writtenLength;
             
             remainingLength -= writtenLength;
-            value = value % Math.pow(2, remainingLength);
+            valueN = valueN % BigInt(Math.pow(2, remainingLength));
 
             if (this.pendingBits === 8) {
-                this.buffer[this.bufferedBytes++] = this.pendingByte;
+                this.buffer[this.bufferedBytes++] = Number(this.pendingByte);
                 this.pendingBits = 0;
-                this.pendingByte = 0;
+                this.pendingByte = BigInt(0);
 
                 if (this.bufferedBytes >= this.buffer.length) {
                     this.stream.write(this.buffer); // TODO: callback

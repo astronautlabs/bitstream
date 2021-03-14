@@ -23,8 +23,12 @@
     "@types/chai": "^4.2.14",
     "@types/node": "^14.0.4",
     "@types/reflect-metadata": "^0.1.0",
+    "@types/stream-buffers": "^3.0.3",
     "chai": "^4.2.0",
     "razmin": "^0.6.20",
     "typescript": "^4.0.3"
+  },
+  "dependencies": {
+    "stream-buffers": "^3.0.2"
   }
 }

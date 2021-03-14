@@ -1,3 +1,4 @@
+import { WritableStreamBuffer } from "stream-buffers";
 import { Constructor } from "./constructor";
 import { StructureSerializer } from "./field";
 import { BitstreamReader } from "./reader";
@@ -32,6 +33,74 @@ export class BitstreamElement {
         let selected : string = ref(<any>selector);
 
         return this.syntax.find(x => x.name === selected);
+    }
+
+    serialize(fromRef? : FieldRef<this>, toRef? : FieldRef<this>) {
+        if (!fromRef)
+            fromRef = this.syntax[0].name;
+
+        if (!toRef) {
+            if (this.getFieldBeingComputed()) {
+                let toIndex = this.syntax.findIndex(f => f.name === this.getFieldBeingComputed().name);
+
+                if (!this.getFieldBeingComputedIntrospectable())
+                    toIndex -= 1;
+                
+                if (toIndex < 0)
+                    return Buffer.alloc(0);
+                
+                toRef = this.syntax[toIndex].name;
+            } else if (this.isBeingRead) {
+                //console.log(`${this.constructor.name}: Autodetermining last read field from ${JSON.stringify(this.readFields)}`);
+                let readFields = this.syntax.filter(x => this.readFields.includes(x.name)).map(x => x.name);
+                toRef = readFields[readFields.length - 1];
+                //console.log(`${this.constructor.name}: Selected ${String(readFields[readFields.length - 1])} as end of measure range`);
+            } else {
+                //console.log(`${this.constructor.name} is not being read, so grabbing last field`);
+                toRef = this.syntax[this.syntax.length - 1].name;
+            }
+        }
+
+        let from = this.selectField(fromRef);
+        let to = this.selectField(toRef);
+        let fromIndex = this.syntax.findIndex(x => x === from);
+        let toIndex = this.syntax.findIndex(x => x === to);
+
+        let stream = new WritableStreamBuffer();
+        let writer = new BitstreamWriter(stream);
+
+        if (fromIndex > toIndex) {
+            throw new Error(`Cannot measure from field ${fromIndex} (${String(from.name)}) to ${toIndex} (${String(to.name)}): First field comes after last field`);
+        }
+
+        //console.log(`Measuring from ${String(from.name)} [${fromIndex}] to ${String(to.name)} [${toIndex}]`);
+
+        for (let i = fromIndex, max = toIndex; i <= max; ++i) {
+            let field = this.syntax[i];
+
+            if (!this.isPresent(field, this))
+                continue;
+
+            let writtenValue = this[field.name];
+
+            if (field.options.writtenValue) {
+                if (typeof field.options.writtenValue === 'function') {
+                    writtenValue = field.options.writtenValue(this, field);
+                } else {
+                    writtenValue = field.options.writtenValue;
+                }
+            }
+
+            try {
+                field.options.serializer.write(writer, field.type, this, field, writtenValue);
+            } catch (e) {
+                console.error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
+                console.error(e);
+                throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
+            }
+        }
+
+        return <Buffer>stream.getContents();
     }
 
     measure(fromRef? : FieldRef<this>, toRef? : FieldRef<this>) {
@@ -268,8 +337,16 @@ export class BitstreamElement {
             }
 
             try {
-                instance[element.name] = await element.options.serializer.read(bitstream, element.type, instance, element);
+                let readValue = await element.options.serializer.read(bitstream, element.type, instance, element);
+                if (!element.options.isIgnored)
+                    instance[element.name] = readValue;
                 instance.readFields.push(element.name);
+
+                let displayedValue = `${readValue}`;
+
+                if (typeof readValue === 'number') {
+                    displayedValue = `0x${readValue.toString(16)} [${readValue}]`;
+                }
 
                 if (globalThis.BITSTREAM_TRACE === true) {
                     try {
@@ -285,7 +362,7 @@ export class BitstreamElement {
                                     , 4)
                                 } bits = ${this.leftPad(instance.measureTo(element.name), 4)} bits total] `
                             + 
-                            `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} => ${instance[element.name]}`
+                            `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} => ${displayedValue}`
                         );
                     } catch (e) {
                         console.log(`Error while tracing read operation for element ${String(element.name)}: ${e.message}`);
@@ -320,7 +397,23 @@ export class BitstreamElement {
             if (!this.isPresent(element, this))
                 continue;
 
-            element.options.serializer.write(bitstream, element.type, this, element, this[element.name]);
+            let writtenValue = this[element.name];
+
+            if (element.options.writtenValue) {
+                if (typeof element.options.writtenValue === 'function') {
+                    writtenValue = element.options.writtenValue(this, element);
+                } else {
+                    writtenValue = element.options.writtenValue;
+                }
+            }
+
+            try {
+                element.options.serializer.write(bitstream, element.type, this, element, writtenValue);
+            } catch (e) {
+                console.error(`Failed to write field ${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
+                console.error(e);
+                throw new Error(`Failed to write field ${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
+            }
         }
     }
 

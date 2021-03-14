@@ -61,6 +61,14 @@ export class NumberSerializer implements Serializer {
     }
 }
 
+export class NullSerializer implements Serializer {
+    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    }
+
+    write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
+    }
+}
+
 export class BooleanSerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         return await reader.read(resolveLength(field.length, parent, field)) !== 0;
@@ -303,7 +311,8 @@ export class StructureSerializer implements Serializer {
             //console.log(`Copying pre-parsed values into ${element.constructor.name} from ${baseElement.constructor.name}...`);
             element.syntax.forEach(f => {
                 if (baseElement.syntax.some(x => x.name === f.name) && baseElement.readFields.includes(f.name)) {
-                    element[f.name] = baseElement[f.name];
+                    if (!f.options.isIgnored)
+                        element[f.name] = baseElement[f.name];
                     element.readFields.push(f.name);
                 }
             });
@@ -334,7 +343,13 @@ export class StructureSerializer implements Serializer {
 }
 
 export type LengthDeterminant = number | ((instance : any, f : FieldDefinition) => number);
+export type ValueDeterminant<T = any> = T | ((instance : any, f : FieldDefinition) => T);
 
+/**
+ * Mark a property of a BitstreamElement subclass as a field that should be read from the bitstream.
+ * @param length The length of the field, in bits (except when the field has type Buffer or String, in which case it is in bytes)
+ * @param options 
+ */
 export function Field(length? : LengthDeterminant, options? : FieldOptions) {
     if (!options)
         options = {};
@@ -374,7 +389,13 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
         }
 
         if (!options.serializer) {
-            if (field.type === Object)
+            if (field.type === Array)
+                options.serializer = new ArraySerializer();
+            else if (field.type?.prototype instanceof BitstreamElement)
+                options.serializer = new StructureSerializer();
+            else if (field.length === 0)
+                options.serializer = new NullSerializer();
+            else if (field.type === Object)
                 options.serializer = new NumberSerializer();
             else if (field.type === Number)
                 options.serializer = new NumberSerializer();
@@ -384,14 +405,43 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
                 options.serializer = new BufferSerializer();
             else if (field.type === String)
                 options.serializer = new StringSerializer();
-            else if (field.type?.prototype instanceof BitstreamElement)
-                options.serializer = new StructureSerializer();
-            else if (field.type === Array)
-                options.serializer = new ArraySerializer();
             else
                 throw new Error(`${containingType.name}#${String(field.name)}: No serializer available for type ${field.type?.name || '<unknown>'}`);
         }
 
         (<FieldDefinition[]>containingType.ownSyntax).push(field);
     }
+}
+
+/**
+ * Used to mark a specific field as reserved. The value in this field will be read, but will not be 
+ * copied into the BitsreamElement, and when writing the value will always be all high bits.
+ * @param length 
+ * @param options 
+ */
+export function Reserved(length : LengthDeterminant, options? : FieldOptions) {
+    if (!options)
+        options = {};
+
+    options.isIgnored = true;
+    options.writtenValue = (instance, field : FieldDefinition) => {
+        if (field.type === Number) {
+            let currentLength = resolveLength(field.length, instance, field);
+            return Math.pow(2, currentLength) - 1;
+        }
+    };
+
+    let decorator = Field(length, options);
+    return (target : any, fieldName : string | symbol) => {
+        fieldName = Symbol(`[reserved: ${typeof length === 'number' ? `${length} bits` : `dynamic`}]`);
+        Reflect.defineMetadata('design:type', Number, target, fieldName);
+        return decorator(target, fieldName);
+    }
+}
+
+/**
+ * Used to mark a location within a BitstreamElement which can be used with measure()
+ */
+export function Marker() {
+    return Field(0, { isIgnored: true });
 }
