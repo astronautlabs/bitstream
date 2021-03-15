@@ -50,6 +50,9 @@ export class NumberSerializer implements Serializer {
     }
 
     write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
+        if (value === undefined)
+            value = 0;
+
         let length : number;
         try {
             length = resolveLength(field.length, instance, field);
