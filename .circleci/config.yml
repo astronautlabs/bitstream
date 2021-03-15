@@ -1,90 +1,52 @@
-# kick: 0
+# kick: 1
 
 version: 2.1
 
-orbs:
-  win: circleci/windows@2.2.0
-
 commands:
-  run_tests_windows:
-    description: "Build and run the test suite"
-    parameters:
-      version:
-        type: string
-    steps:
-      - run_tests:
-          version: << parameters.version >>
-          os: "windows"
-  run_tests_linux:
-    description: "Build and run the test suite"
-    parameters:
-      version:
-        type: string
-    steps:
-      - run_tests:
-          version: << parameters.version >>
-          os: "linux"
   run_tests:
-    description: "Build and run the test suite"
+    description: "Build @astronautlabs/scte35 and run the test suite"
     parameters:
       version:
-        type: string
-      os:
         type: string
     steps:
       - checkout
       - restore_cache:
           keys:
-          - v1-dependencies-<< parameters.os >>-<< parameters.version >>-{{ checksum "package.json" }}
-          - v1-dependencies-<< parameters.os >>-<< parameters.version >>-
+          - v1-dependencies-<< parameters.version >>-{{ checksum "package.json" }}
+          - v1-dependencies-<< parameters.version >>-
       - run: npm install
       - save_cache:
           paths:
             - node_modules
-          key: v1-dependencies-<< parameters.os >>-<< parameters.version >>-{{ checksum "package.json" }}
+          key: v1-dependencies-<< parameters.version >>-{{ checksum "package.json" }}
       - run: npm test
 jobs:
-  windows-node-12:
-    executor:
-      name: win/default
-      size: medium
+  node-15:
+    docker:
+      - image: circleci/node:15
+    working_directory: ~/repo
     steps:
-      - run_tests_windows:
-          version: "12"
-  linux-node-14:
+      - run_tests:
+          version: "15"
+  node-14:
     docker:
       - image: circleci/node:14
     working_directory: ~/repo
     steps:
-      - run_tests_linux:
+      - run_tests:
           version: "14"
-  linux-node-12:
+  node-12:
     docker:
       - image: circleci/node:12
     working_directory: ~/repo
     steps:
-      - run_tests_linux:
+      - run_tests:
           version: "12"
-  linux-node-10:
-    docker:
-      - image: circleci/node:10
-    working_directory: ~/repo
-    steps:
-      - run_tests_linux:
-          version: "10"
-  linux-node-8:
-    docker:
-      - image: circleci/node:8
-    working_directory: ~/repo
-    steps:
-      - run_tests_linux:
-          version: "8"
 
 workflows:
   version: 2
   build:
     jobs:
-      - linux-node-14
-      - linux-node-12
-      - linux-node-10
-      - linux-node-8
+      - node-15
+      - node-14
+      - node-12
