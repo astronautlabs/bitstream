@@ -25,6 +25,15 @@ export class BitstreamElement {
         return syntax;
     }
 
+    clone(): this {
+        let newInstance = new (<any>this.constructor)();
+
+        for (let field of this.syntax)
+            newInstance[field.name] = this[field.name];
+
+        return newInstance;
+    }
+
     selectField(ref : FieldRef<this>) {
         if (typeof ref === 'string' || typeof ref === 'symbol')
             return this.syntax.find(x => x.name === ref);
