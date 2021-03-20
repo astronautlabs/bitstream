@@ -35,7 +35,15 @@ export class BitstreamElement {
         return this.syntax.find(x => x.name === selected);
     }
 
-    serialize(fromRef? : FieldRef<this>, toRef? : FieldRef<this>) {
+    /**
+     * Serialize all fields or a subset of fields into a Buffer. 
+     * @param fromRef 
+     * @param toRef 
+     * @param autoPad When true and the bitsize of a field is not a multiple of 8, the final byte will 
+     *                contain zeros up to the next byte. When false (default), serialize() will throw
+     *                if the size is not a multiple of 8.
+     */
+    serialize(fromRef? : FieldRef<this>, toRef? : FieldRef<this>, autoPad = false) {
         if (!fromRef)
             fromRef = this.syntax[0].name;
 
@@ -73,6 +81,11 @@ export class BitstreamElement {
             throw new Error(`Cannot measure from field ${fromIndex} (${String(from.name)}) to ${toIndex} (${String(to.name)}): First field comes after last field`);
         }
 
+        let length = this.measure(fromRef, toRef);
+
+        if (!autoPad && length % 8 !== 0)
+            throw new Error(`Cannot serialize ${length} bits evenly into ${Math.ceil(length / 8)} bytes`);
+
         //console.log(`Measuring from ${String(from.name)} [${fromIndex}] to ${String(to.name)} [${toIndex}]`);
 
         for (let i = fromIndex, max = toIndex; i <= max; ++i) {
@@ -94,7 +107,7 @@ export class BitstreamElement {
             try {
                 field.options.serializer.write(writer, field.type, this, field, writtenValue);
             } catch (e) {
-                console.error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
+                console.error(`Failed to write field ${field.type.name}#${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
                 console.error(e);
                 throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
             }
@@ -410,7 +423,7 @@ export class BitstreamElement {
             try {
                 element.options.serializer.write(bitstream, element.type, this, element, writtenValue);
             } catch (e) {
-                console.error(`Failed to write field ${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
+                console.error(`Failed to write field ${element.type.name}#${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
                 console.error(e);
                 throw new Error(`Failed to write field ${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
             }
