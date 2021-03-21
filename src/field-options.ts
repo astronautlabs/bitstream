@@ -15,6 +15,12 @@ export interface FieldOptions {
     variants? : (Function | VariantDefinition)[];
 
     /**
+     * Specify a set of subfields (by field name) that should be skipped when serializing this field.
+     * Only relevant for subelements. For other field types, this is ignored.
+     */
+    skip?: (string | symbol)[];
+
+    /**
      * When true, the field represents the "variant marker", which is the 
      * location in a superclass where a variant subclass's fields are expected.
      * Not meant to be used directly, instead use `@VariantMarker()`

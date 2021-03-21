@@ -313,6 +313,9 @@ export class StructureSerializer implements Serializer {
         if (baseElement) {
             //console.log(`Copying pre-parsed values into ${element.constructor.name} from ${baseElement.constructor.name}...`);
             element.syntax.forEach(f => {
+                if (defn.options.skip && defn.options.skip.includes(f.name))
+                    return;
+
                 if (baseElement.syntax.some(x => x.name === f.name) && baseElement.readFields.includes(f.name)) {
                     if (!f.options.isIgnored)
                         element[f.name] = baseElement[f.name];
@@ -340,11 +343,11 @@ export class StructureSerializer implements Serializer {
         return element;
     }
 
-    async write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
+    async write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: BitstreamElement) {
         if (!value) {
             throw new Error(`Cannot write ${field.type.name}#${String(field.name)}: Value is null/undefined`);
         }
-        await value.write(writer);
+        await value.write(writer, { skip: field.options.skip });
     }
 }
 

@@ -10,6 +10,13 @@ export type FieldRef<T> = string | symbol | ((exemplar : {
     [P in keyof T]: any;
 }) => any);
 
+export interface WriteOptions {
+    /**
+     * Set of fields to skip while writing
+     */
+    skip? : (string | symbol)[];
+}
+
 export class BitstreamElement {
     static get syntax() : FieldDefinition[] {
         let parentSyntax = (<FieldDefinition[]>(Object.getPrototypeOf(this).syntax || []));
@@ -408,12 +415,15 @@ export class BitstreamElement {
         }
     }
 
-    protected async writeGroup(bitstream : BitstreamWriter, name : string) {
+    protected async writeGroup(bitstream : BitstreamWriter, name : string, options? : WriteOptions) {
         let syntax = this.syntax;
         for (let element of syntax) {
             if (name !== '*' && element.options.group !== name)
                 continue;
             
+            if (options.skip && options.skip.includes(element.name))
+                return;
+
             // Preconditions 
 
             if (!this.isPresent(element, this))
@@ -451,8 +461,8 @@ export class BitstreamElement {
         return <any> await new StructureSerializer().read(bitstream, this, null, null);
     }
 
-    async write(bitstream : BitstreamWriter) {
-        await this.writeGroup(bitstream, '*');
+    async write(bitstream : BitstreamWriter, options? : WriteOptions) {
+        await this.writeGroup(bitstream, '*', options);
     }
 
     /**
