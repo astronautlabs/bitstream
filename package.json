@@ -1,6 +1,6 @@
 {
   "name": "@astronautlabs/bitstream",
-  "version": "0.0.24",
+  "version": "0.0.25",
   "description": "Utilities for packing/unpacking fields of a bitstream",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
