@@ -421,7 +421,7 @@ export class BitstreamElement {
             if (name !== '*' && element.options.group !== name)
                 continue;
             
-            if (options.skip && options.skip.includes(element.name))
+            if (options?.skip && options.skip.includes(element.name))
                 return;
 
             // Preconditions 
