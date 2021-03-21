@@ -415,7 +415,7 @@ export class BitstreamElement {
         }
     }
 
-    protected async writeGroup(bitstream : BitstreamWriter, name : string, options? : WriteOptions) {
+    protected writeGroup(bitstream : BitstreamWriter, name : string, options? : WriteOptions) {
         let syntax = this.syntax;
         for (let element of syntax) {
             if (name !== '*' && element.options.group !== name)
@@ -461,8 +461,8 @@ export class BitstreamElement {
         return <any> await new StructureSerializer().read(bitstream, this, null, null);
     }
 
-    async write(bitstream : BitstreamWriter, options? : WriteOptions) {
-        await this.writeGroup(bitstream, '*', options);
+    write(bitstream : BitstreamWriter, options? : WriteOptions) {
+        this.writeGroup(bitstream, '*', options);
     }
 
     /**
