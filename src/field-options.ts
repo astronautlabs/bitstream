@@ -1,4 +1,5 @@
 import { ArrayOptions } from "./array-options";
+import { BufferOptions } from "./buffer-options";
 import { Discriminant } from "./discriminant";
 import { ValueDeterminant } from "./field";
 import { Serializer } from "./serializer";
@@ -9,6 +10,7 @@ export interface FieldOptions {
     serializer? : Serializer;
     string? : StringEncodingOptions;
     array? : ArrayOptions;
+    buffer? : BufferOptions;
     group? : string;
     presentWhen? : Discriminant;
     excludedWhen? : Discriminant;

@@ -238,12 +238,16 @@ export class BufferSerializer implements Serializer {
 
         let fieldLength = Math.floor(length);
 
-        if (value.length > fieldLength) {
-            writer.writeBuffer(value.subarray(0, resolveLength(field.length, parent, field)));
-        } else {
+        if (field.options?.buffer?.truncate === false) {
             writer.writeBuffer(value);
-            if (value.length < fieldLength)
-                writer.writeBuffer(Buffer.alloc(fieldLength - value.length, 0));
+        } else {
+            if (value.length > fieldLength) {
+                writer.writeBuffer(value.subarray(0, resolveLength(field.length, parent, field)));
+            } else {
+                writer.writeBuffer(value);
+                if (value.length < fieldLength)
+                    writer.writeBuffer(Buffer.alloc(fieldLength - value.length, 0));
+            }
         }
     }
 }
