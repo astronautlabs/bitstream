@@ -422,7 +422,7 @@ export class BitstreamElement {
                 continue;
             
             if (options?.skip && options.skip.includes(element.name))
-                return;
+                continue;
 
             // Preconditions 
 
