@@ -10,7 +10,7 @@ export type FieldRef<T> = string | symbol | ((exemplar : {
     [P in keyof T]: any;
 }) => any);
 
-export interface WriteOptions {
+export interface SerializeOptions {
     /**
      * Set of fields to skip while writing
      */
@@ -322,7 +322,7 @@ export class BitstreamElement {
         return true;
     }
 
-    protected async readGroup(bitstream : BitstreamReader, name : string, variator : () => Promise<this>) {
+    protected async readGroup(bitstream : BitstreamReader, name : string, variator : () => Promise<this>, options? : SerializeOptions) {
         let syntax : FieldDefinition[];
         
         if (name === '*') { // all my fields
@@ -346,6 +346,9 @@ export class BitstreamElement {
             if (!this.isPresent(element, instance))
                 continue;
                 
+            if (options?.skip && options.skip.includes(element.name))
+                continue;
+
             if (element.options.isVariantMarker && variator) {
                 if (globalThis.BITSTREAM_TRACE)
                     console.log(`Variating at marker...`);
@@ -415,7 +418,7 @@ export class BitstreamElement {
         }
     }
 
-    protected writeGroup(bitstream : BitstreamWriter, name : string, options? : WriteOptions) {
+    protected writeGroup(bitstream : BitstreamWriter, name : string, options? : SerializeOptions) {
         let syntax = this.syntax;
         for (let element of syntax) {
             if (name !== '*' && element.options.group !== name)
@@ -449,19 +452,19 @@ export class BitstreamElement {
         }
     }
 
-    async read(bitstream : BitstreamReader, variator? : () => Promise<this>) {
-        await this.readGroup(bitstream, '*', variator);
+    async read(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
+        await this.readGroup(bitstream, '*', variator, options);
     }
 
-    async readOwn(bitstream : BitstreamReader, variator? : () => Promise<this>) {
-        await this.readGroup(bitstream, '$*', variator);
+    async readOwn(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
+        await this.readGroup(bitstream, '$*', variator, options);
     }
 
     static async read<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader, parent? : BitstreamElement) : Promise<T> {
         return <any> await new StructureSerializer().read(bitstream, this, null, null);
     }
 
-    write(bitstream : BitstreamWriter, options? : WriteOptions) {
+    write(bitstream : BitstreamWriter, options? : SerializeOptions) {
         this.writeGroup(bitstream, '*', options);
     }
 
