@@ -9,5 +9,6 @@ import { FieldDefinition } from "./field-definition";
  */
 export interface Serializer {
     read(reader : BitstreamReader, type : any, parent : BitstreamElement, field : FieldDefinition) : Promise<any>;
+    readSync?(reader : BitstreamReader, type : any, parent : BitstreamElement, field : FieldDefinition) : any;
     write(writer : BitstreamWriter, type : any, parent : BitstreamElement, field : FieldDefinition, value : any);
 }
