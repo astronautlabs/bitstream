@@ -643,10 +643,10 @@ export class BitstreamElement {
      * @param data 
      * @returns 
      */
-    static async deserialize(data : Buffer | ArrayBuffer) {
+    static async deserialize<T>(this : Constructor<T>, data : Buffer | ArrayBuffer): Promise<T> {
         let reader = new BitstreamReader();
         reader.addBuffer(Buffer.from(data));
-        return this.read(reader);
+        return await (<any>this).read(reader);
     }
 
     /**
