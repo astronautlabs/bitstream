@@ -52,7 +52,7 @@ export class StructureSerializer implements Serializer {
 
         if (baseElement) {
             element.syntax.forEach(f => {
-                if (defn.options?.skip && defn.options.skip.includes(f.name))
+                if (defn?.options?.skip && defn.options.skip.includes(f.name))
                     return;
 
                 if (baseElement.syntax.some(x => x.name === f.name) && baseElement.readFields.includes(f.name)) {
