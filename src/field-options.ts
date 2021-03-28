@@ -6,14 +6,58 @@ import { Serializer } from "./serializer";
 import { StringEncodingOptions } from "./string-encoding-options";
 import { VariantDefinition } from "./variant";
 
+/**
+ * Defines options available for properties marked with `@Field()` within BitstreamElement classes.
+ */
 export interface FieldOptions {
+    /**
+     * Specify a custom serializer for this field. If not specified, this option will be 
+     * filled based on the runtime type metadata available for the given field. For instance,
+     * if the field is of type Number, it will get a NumberSerializer, if the type is a subclass 
+     * of BitstreamElement, it will get StructureSerializer, etc.
+     */
     serializer? : Serializer;
+
+    /**
+     * Specify options specific to string fields, such as text encoding and null termination.
+     */
     string? : StringEncodingOptions;
+
+    /**
+     * Specify options specific to array fields, such as how the length of the array should be 
+     * determined and what element type the array is (because Typescript does not expose the type of 
+     * an array field)
+     */
     array? : ArrayOptions;
+
+    /**
+     * Specify options specific to Buffer fields
+     */
     buffer? : BufferOptions;
+
+    /**
+     * Define a group name that this field falls within. This is not used by default and is only useful
+     * when implementing custom reading and writing code.
+     */
     group? : string;
+
+    /**
+     * Define a function that indicates when the field is present within the bitstream. This is the opposite
+     * of `excludedWhen`.
+     */
     presentWhen? : Discriminant;
+
+    /**
+     * Define a function that indicates when the field is absent within the bitstream. This is the opposite 
+     * of `presentWhen`.
+     */
     excludedWhen? : Discriminant;
+
+    /**
+     * Specify a set of subclasses which should be considered when variating this field. When not specified,
+     * all subclasses marked with `@Variant` are considered, this option lets you narrow the options in specific
+     * cases
+     */
     variants? : (Function | VariantDefinition)[];
 
     /**

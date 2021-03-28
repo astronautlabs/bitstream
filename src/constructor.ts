@@ -1,3 +1,3 @@
-export interface Constructor<T> {
+export interface Constructor<T = any> {
     new(...args) : T;
 }

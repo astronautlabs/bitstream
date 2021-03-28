@@ -2,22 +2,37 @@ import { Transform } from "stream";
 import { Constructor } from "./constructor";
 import { StringEncodingOptions } from "./string-encoding-options";
 
+/**
+ * Represents a request to read a number of bits
+ */
 export interface BitstreamRequest {
     resolve : (buffer : number) => void;
     length : number;
     peek : boolean;
 }
 
+/**
+ * A class which lets you read through one or more Buffers bit-by-bit. All data is read in big-endian (network) byte 
+ * order
+ */
 export class BitstreamReader {
     private buffers : Buffer[] = [];
     private bufferedLength : number = 0;
     private blockedRequest : BitstreamRequest = null;
     private offset = 0;
 
+    /**
+     * The number of bits that are currently available.
+     */
     get available() {
         return this.bufferedLength - this.skippedLength;
     }
 
+    /**
+     * Check if the given number of bits are currently available.
+     * @param length The number of bits to check for
+     * @returns True if the required number of bits is available, false otherwise
+     */
     isAvailable(length : number) {
         return this.bufferedLength >= length;
     }
@@ -27,6 +42,13 @@ export class BitstreamReader {
             throw new Error(`Only one read() can be outstanding at a time.`);
     }
 
+    /**
+     * Asynchronously read the given number of bytes, encode it into a string, and return the result,
+     * optionally using a specific text encoding.
+     * @param length The number of bytes to read
+     * @param options A set of options to control conversion into a string. @see StringEncodingOptions
+     * @returns The resulting string
+     */
     async readString(length : number, options? : StringEncodingOptions): Promise<string> {
         this.ensureNoReadPending();
 
@@ -50,6 +72,13 @@ export class BitstreamReader {
         return buffer.toString(<any>options.encoding || 'utf-8');
     }
 
+    /**
+     * Synchronously read the given number of bytes, encode it into a string, and return the result,
+     * optionally using a specific text encoding.
+     * @param length The number of bytes to read
+     * @param options A set of options to control conversion into a string. @see StringEncodingOptions
+     * @returns The resulting string
+     */
     readStringSync(length : number, options? : StringEncodingOptions): string {
         if (!options)
             options = {};
@@ -73,16 +102,32 @@ export class BitstreamReader {
         return buffer.toString(<any>options.encoding || 'utf-8');
     }
 
+    /**
+     * Read a number of the given bitlength synchronously without advancing
+     * the read head.
+     * @param length The number of bits to read
+     * @returns The number read from the bitstream
+     */
     peekSync(length : number) {
         return this.readCoreSync(length, false);
     }
 
     private skippedLength = 0;
 
+    /**
+     * Skip the given number of bits. 
+     * @param length The number of bits to skip
+     */
     skip(length : number) {
         this.skippedLength += length;
     }
     
+    /**
+     * Read a number of the given bitlength synchronously. If there are not enough 
+     * bits available, an error is thrown.
+     * @param length The number of bits to read
+     * @returns The number read from the bitstream
+     */
     readSync(length : number): number {
         return this.readCoreSync(length, true);
     }
@@ -101,8 +146,6 @@ export class BitstreamReader {
         let offset = this.offset;
         let bufferIndex = 0;
 
-        //console.log(`Reading number of ${remainingLength} bits (initial byteOffset=${offset}, bitOffset=${offset % 8})...`);
-
         let bitLength = 0;
 
         while (remainingLength > 0) {
@@ -113,11 +156,8 @@ export class BitstreamReader {
             let bitContribution = Math.min(8 - bitOffset, remainingLength);
             let mask = Math.pow(0x2, bitContribution) - 1;
             
-            //console.log(` - Taking ${bitContribution} bits from current byte: 0b${((byte >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) & BigInt(mask)).toString(2)}`);
-            //console.log(` - Making space for ${bitContribution} bits: 0b${(value << BigInt(bitContribution)).toString(2)}`);
             value = (value << BigInt(bitContribution)) | ((byte >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) & BigInt(mask));
-            //console.log(` - Value is now: 0b${value.toString(2)}`);
-
+            
             // update counters
 
             offset += bitContribution;
@@ -130,8 +170,6 @@ export class BitstreamReader {
             }
         }
 
-        //console.log(` - Final value: 0b${value.toString(2)}`);
-        
         if (consume) {
             this.buffers.splice(0, bufferIndex);
             this.bufferedLength -= length;
@@ -161,6 +199,11 @@ export class BitstreamReader {
         }
     }
 
+    /**
+     * Wait until the given number of bits is available
+     * @param length The number of bits to wait for
+     * @returns A promise which will resolve once the given number of bits is available
+     */
     assure(length : number) : Promise<void> {
         this.ensureNoReadPending();
 
@@ -174,6 +217,12 @@ export class BitstreamReader {
         return promise.then(() => {});
     }
 
+    /**
+     * Asynchronously read a number of the given bitlength. If there are not enough bits available
+     * to complete the operation, the operation is delayed until enough bits become available
+     * @param length The number of bits to read
+     * @returns A promise which resolves with the number read from the bitstream
+     */
     read(length : number) : Promise<number> {
         this.ensureNoReadPending();
         
@@ -187,15 +236,31 @@ export class BitstreamReader {
         }
     }
 
+    /**
+     * Asynchronously read a number of the given bitlength without advancing the read head.
+     * @param length The number of bits to read. If there are not enough bits available 
+     * to complete the operation, the operation is delayed until enough bits become available.
+     * @returns A promise which resolves iwth the number read from the bitstream
+     */
     async peek(length : number): Promise<number> {
         await this.assure(length);
         return this.peekSync(length);
     }
 
+    /**
+     * Add a buffer onto the end of the bitstream. Important: This method does not insert the data at the 
+     * current read head, it places it at the end of the bitstream. 
+     * @param buffer The buffer to add to the bitstream
+     * @deprecated Use addBuffer() instead
+     */
     unread(buffer : Buffer) {
         this.buffers.unshift(buffer);
     }
     
+    /**
+     * Add a buffer onto the end of the bitstream.
+     * @param buffer The buffer to add to the bitstream
+     */
     addBuffer(buffer : Buffer) {
         this.buffers.push(buffer);
         this.bufferedLength += buffer.length * 8;

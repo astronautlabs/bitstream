@@ -6,6 +6,15 @@ import { FieldDefinition } from "./syntax-element";
 import { VariantDefinition } from "./variant";
 import { BitstreamWriter } from "./writer";
 
+/**
+ * Given a LengthDeterminant function, a BitstreamElement instance (the context), and a field definition,
+ * this function returns the number of bits that should be read. This is used to determine the actual bitlength 
+ * of fields when reading and writing BitstreamElement via BitstreamReader and BitstreamWriter.
+ * @param determinant The length determinant
+ * @param parent The BitstreamElement instance for context
+ * @param field The field definition for context
+ * @returns The bitlength of the field in this context
+ */
 export function resolveLength(determinant : LengthDeterminant, parent : BitstreamElement, field : FieldDefinition) {
     if (typeof determinant === 'number')
         return determinant;
@@ -37,6 +46,9 @@ export function resolveLength(determinant : LengthDeterminant, parent : Bitstrea
     return length;
 }
 
+/**
+ * Serializes numbers to/from bitstreams
+ */
 export class NumberSerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         let length : number;
@@ -64,6 +76,9 @@ export class NumberSerializer implements Serializer {
     }
 }
 
+/**
+ * Serializes nothing to/from bitstreams. Used when the field is a no-op, such as for fields decorated with `@Marker`
+ */
 export class NullSerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
     }
@@ -72,6 +87,9 @@ export class NullSerializer implements Serializer {
     }
 }
 
+/**
+ * Serializes booleans to/from bitstreams.
+ */
 export class BooleanSerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         return await reader.read(resolveLength(field.length, parent, field)) !== 0;
@@ -82,6 +100,9 @@ export class BooleanSerializer implements Serializer {
     }
 }
 
+/**
+ * Serializes arrays to/from bitstreams
+ */
 export class ArraySerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         let count = 0;
@@ -127,7 +148,6 @@ export class ArraySerializer implements Serializer {
                 }
             }
         } else {
-            //console.log(`Reading array of ${field.options.array.type.name}, size ${count}`);
             if (field.options.array.hasMore) {
                 let i = 0;
                 do {
@@ -146,7 +166,6 @@ export class ArraySerializer implements Serializer {
                     let element : BitstreamElement;
                     let serializer = new StructureSerializer();
 
-                    //console.log(`Reading index ${i++} of array...`);
                     element = await serializer.read(reader, field.options.array.type, parent, field);
                     elements.push(element);
                     parent[field.name].push(element);
@@ -157,7 +176,6 @@ export class ArraySerializer implements Serializer {
                     let element : BitstreamElement;
                     let serializer = new StructureSerializer();
 
-                    //console.log(`Reading index ${i} of array...`);
                     element = await serializer.read(reader, field.options.array.type, parent, field);
                     elements.push(element);
                     parent[field.name].push(element);
@@ -211,6 +229,9 @@ export class ArraySerializer implements Serializer {
     }
 }
 
+/**
+ * Serializes buffers to/from bitstreams
+ */
 export class BufferSerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         let length : number;
@@ -252,6 +273,9 @@ export class BufferSerializer implements Serializer {
     }
 }
 
+/**
+ * Serializes strings to/from bitstreams
+ */
 export class StringSerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         return await reader.readString(resolveLength(field.length, parent, field), field.options.string);
@@ -269,6 +293,9 @@ export class StringSerializer implements Serializer {
     }
 }
 
+/**
+ * Serializes BitstreamElement instances to/from bitstreams
+ */
 export class StructureSerializer implements Serializer {
     async read(reader: BitstreamReader, type : any, parent: BitstreamElement, defn : FieldDefinition, baseElement? : BitstreamElement) {
         let element : BitstreamElement = new type();
@@ -305,17 +332,14 @@ export class StructureSerializer implements Serializer {
             if (variants) {
                 let match = variants.find(v => v.discriminant(element, parent));
                 if (match) {
-                    //console.log(`[::] ${element.constructor.name} into ${match.type.name}`);
                     return element = await this.read(reader, match.type, parent, defn, element);
                 }
             }
 
-            //console.log(`No matching variants found out of ${variants.length} options.`);
             return element;
         };
 
         if (baseElement) {
-            //console.log(`Copying pre-parsed values into ${element.constructor.name} from ${baseElement.constructor.name}...`);
             element.syntax.forEach(f => {
                 if (defn.options?.skip && defn.options.skip.includes(f.name))
                     return;
@@ -327,10 +351,8 @@ export class StructureSerializer implements Serializer {
                 }
             });
 
-            //console.log(`Reading own values of ${element.constructor.name}`);
             await element.readOwn(reader, variator, { skip: defn?.options?.skip });
         } else {
-            //console.log(`Reading values of ${element.constructor.name}`);
             await element.read(reader, variator, { skip: defn?.options?.skip });
         }
 
@@ -355,7 +377,16 @@ export class StructureSerializer implements Serializer {
     }
 }
 
+/**
+ * Determines the bitlength of a certain field. Can be a number or a function that dynamically
+ * determines the value based on the current context.
+ */
 export type LengthDeterminant = number | ((instance : any, f : FieldDefinition) => number);
+
+/**
+ * Determines the value of a certain field. Can be a value or a function that dynamically
+ * determines the value based on the current context.
+ */
 export type ValueDeterminant<T = any> = T | ((instance : any, f : FieldDefinition) => T);
 
 /**
@@ -429,8 +460,8 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
 /**
  * Used to mark a specific field as reserved. The value in this field will be read, but will not be 
  * copied into the BitsreamElement, and when writing the value will always be all high bits.
- * @param length 
- * @param options 
+ * @param length The bitlength determinant
+ * @param options Options related to this reserved field
  */
 export function Reserved(length : LengthDeterminant, options? : FieldOptions) {
     if (!options)
@@ -453,7 +484,9 @@ export function Reserved(length : LengthDeterminant, options? : FieldOptions) {
 }
 
 /**
- * Used to mark a location within a BitstreamElement which can be used with measure()
+ * Used to mark a location within a BitstreamElement which can be useful when used with measure().
+ * Markers are always ignored (meaning they are not actually read/written to the BitstreamElement instance), and
+ * they always have a bitlength of zero.
  */
 export function Marker() {
     return Field(0, { isIgnored: true });

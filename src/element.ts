@@ -6,10 +6,17 @@ import { FieldDefinition } from "./syntax-element";
 import { VariantDefinition } from "./variant";
 import { BitstreamMeasurer, BitstreamWriter } from "./writer";
 
+/**
+ * A reference to a field. Can be a string/symbol or a type-safe function 
+ * which exemplifies the field.
+ */
 export type FieldRef<T> = string | symbol | ((exemplar : {
     [P in keyof T]: any;
 }) => any);
 
+/**
+ * Specify options when serializing a value
+ */
 export interface SerializeOptions {
     /**
      * Set of fields to skip while writing
@@ -17,7 +24,17 @@ export interface SerializeOptions {
     skip? : (string | symbol)[];
 }
 
+/**
+ * BitstreamElement is a base class which can be extended to produce "structures" that can be 
+ * read from and written to a bitstream. It allows you to specify fields along with their type
+ * and bitlength information declaratively, allowing BitstreamElement itself to handle the actual
+ * serialization/deserialization in the context of a passed BitstreamReader/BitstreamWriter.
+ */
 export class BitstreamElement {
+    /**
+     * Retrieve the "syntax" of this element, which is the list of fields defined on the element 
+     * in order of appearance within the bitstream.
+     */
     static get syntax() : FieldDefinition[] {
         let parentSyntax = (<FieldDefinition[]>(Object.getPrototypeOf(this).syntax || []));
         let syntax = parentSyntax.slice();
@@ -32,6 +49,10 @@ export class BitstreamElement {
         return syntax;
     }
 
+    /**
+     * Create a copy of this element instance
+     * @returns A new copy of this element
+     */
     clone(): this {
         let newInstance = new (<any>this.constructor)();
 
@@ -41,6 +62,11 @@ export class BitstreamElement {
         return newInstance;
     }
 
+    /**
+     * Retrieve the field definition of a field as specified by the given field reference
+     * @param ref The field being referenced
+     * @returns The field definition
+     */
     selectField(ref : FieldRef<this>) {
         if (typeof ref === 'string' || typeof ref === 'symbol')
             return this.syntax.find(x => x.name === ref);
@@ -53,11 +79,13 @@ export class BitstreamElement {
 
     /**
      * Serialize all fields or a subset of fields into a Buffer. 
-     * @param fromRef 
-     * @param toRef 
+     * @param fromRef The first field that should be serialized. If not specified, serialization begins at the start of
+     *                  the element
+     * @param toRef The last field that should be serialized. If not specified, serialization continues until the end of
+     *                  the element 
      * @param autoPad When true and the bitsize of a field is not a multiple of 8, the final byte will 
-     *                contain zeros up to the next byte. When false (default), serialize() will throw
-     *                if the size is not a multiple of 8.
+     *                  contain zeros up to the next byte. When false (default), serialize() will throw
+     *                  if the size is not a multiple of 8.
      */
     serialize(fromRef? : FieldRef<this>, toRef? : FieldRef<this>, autoPad = false) {
         if (!fromRef)
@@ -132,6 +160,15 @@ export class BitstreamElement {
         return <Buffer>stream.getContents();
     }
 
+    /**
+     * Measure the number of bits starting from the first field and continuing through the structure until the last 
+     * field. 
+     * @param fromRef The field to start measuring from (including the specified field). When not specified, measurement
+     *                  starts from the first field
+     * @param toRef The field to stop measuring at (including the specified field). When not specified, measurement 
+     *                  ends at the last field
+     * @returns The number of bits occupied by the range of fields
+     */
     measure(fromRef? : FieldRef<this>, toRef? : FieldRef<this>) {
         if (!fromRef)
             fromRef = this.syntax[0].name;
@@ -191,18 +228,41 @@ export class BitstreamElement {
         return measurer.bitLength;
     }
     
+    /**
+     * Measure from the beginning of the element to the given field
+     * @param toRef The field to stop measuring at (including the specified field)
+     * @returns The number of bits occupied by the set of fields
+     */
     measureTo(toRef? : FieldRef<this>) {
         return this.measure(undefined, toRef);
     }
 
+    /**
+     * Measure from the given field to the end of the element
+     * @param fromRef The field to start measuing at (including the specified field)
+     * @returns The number of bits occupied by the set of fields
+     */
     measureFrom(fromRef? : FieldRef<this>) {
         return this.measure(fromRef, undefined);
     }
 
+    /**
+     * Measure the size of a specific field
+     * @param ref The field to measure
+     * @returns The number of bits occupied by the field
+     */
     measureField(ref? : FieldRef<this>) {
         return this.measure(ref, ref);
     }
 
+    /**
+     * Check that this instance is one of a set of given subtypes. If it is,
+     * this instance is returned with the more specific type. 
+     * If it is not, an error is thrown.
+     * 
+     * @param typeChecks One or more subclasses to check
+     * @returns This instance, but casted to the desired type
+     */
     as<T>(...typeChecks : Constructor<T>[]): T {
         if (!typeChecks.some(x => this instanceof x))
             throw new Error(`Tried to cast to one of [${typeChecks.map(x => x.name).join(', ')}], but ${this.constructor.name} does not inherit from any of them`);
@@ -210,22 +270,46 @@ export class BitstreamElement {
         return <any>this;
     }
 
-    static get variants() : VariantDefinition[] {
-        return (<Object>this).hasOwnProperty('ownVariants') ? this.ownVariants : [];
-        // return (Object.getPrototypeOf(this).variants || [])
-        //     .concat((<Object>this).hasOwnProperty('ownVariants') ? this.ownVariants : [])
-        // ;
+    /**
+     * Check that this instance is one of a set of given subtypes.
+     * @param typeChecks 
+     * @returns 
+     */
+    is<T>(...typeChecks : Constructor<T>[]): this is T {
+        return typeChecks.some(x => this instanceof x);
     }
 
+    /**
+     * Retrieve the set of defined variants for this element class
+     */
+    static get variants() : VariantDefinition[] {
+        return (<Object>this).hasOwnProperty('ownVariants') ? this.ownVariants : [];
+    }
+
+    /**
+     * Retrieve the set of variants for this specific class, excluding those 
+     * of its superclasses
+     */
     static ownVariants : VariantDefinition[];
+
+    /**
+     * Retrieve the syntax defined for this specific class, excluding the syntax
+     * defined by its superclasses
+     */
     static ownSyntax : FieldDefinition[];
 
     #parent : BitstreamElement;
 
+    /**
+     * Retrieve the element which contains this element, if any
+     */
     get parent() {
         return this.#parent;
     }
 
+    /**
+     * Set the parent element of this element
+     */
     set parent(value) {
         this.#parent = value;
     }
@@ -233,14 +317,23 @@ export class BitstreamElement {
     #readFields : (string | symbol)[] = [];
     #isBeingRead : boolean;
 
+    /**
+     * True when this element is currently being read, false otherwise
+     */
     get isBeingRead() {
         return this.#isBeingRead;
     }
 
+    /**
+     * Set whether this element is currently being read
+     */
     set isBeingRead(value : boolean) {
         this.#isBeingRead = value;
     }
 
+    /**
+     * Retrieve the set of field names which has been read so far
+     */
     get readFields() {
         return this.#readFields;
     }
@@ -248,20 +341,44 @@ export class BitstreamElement {
     #fieldBeingComputed : FieldDefinition;
     #fieldBeingComputedIntrospectable : boolean;
 
+    /**
+     * Determine if the field currently being computed is introspectable,
+     * meaning that the bits it has read so far will be considered during measurement,
+     * even though it possibly has not finished reading all bits it will read yet
+     * @returns 
+     */
     getFieldBeingComputedIntrospectable() {
         return this.#fieldBeingComputedIntrospectable;
     }
 
+    /**
+     * Get the definition of the field currently being computed, if any.
+     * @returns 
+     */
     getFieldBeingComputed() {
         return this.#fieldBeingComputed;
     }
 
+    /**
+     * Convert this element to a JSON-compatible representation which contains 
+     * only the fields defined on the element (aka its "syntax")
+     */
     toJSON() {
         return this.syntax
             .map(s => [s.name, this[s.name]])
             .reduce((pv, [k, v]) => (pv[k] = v, pv), {});
     }
 
+    /**
+     * Run the given callback while in a state where the given field is considered to be the one "being computed",
+     * which is primarily used to enable the current size of arrays as they are read in cases where the count of 
+     * items in the array is dependent on the overall bitlength of the previous elements that have been read. See
+     * the `hasMore` option of ArrayOptions
+     * 
+     * @param field The field being computed
+     * @param callback The function to run
+     * @param introspectable When true, the computed field is marked as introspectable
+     */
     runWithFieldBeingComputed<T>(field : FieldDefinition, callback : () => T, introspectable? : boolean) {
         let before = this.getFieldBeingComputed();
         let beforeIntrospectable = this.getFieldBeingComputedIntrospectable();
@@ -275,10 +392,17 @@ export class BitstreamElement {
         }
     }
 
+    /**
+     * Get the "syntax" of this element instance; this is the set of fields that compose the element, in order.
+     */
     get syntax() : FieldDefinition[] {
         return (this.constructor as any).syntax;
     }
 
+    /**
+     * Get the "syntax" of this element instance excluding syntax defined by its superclasses; this is the 
+     * set of fields that compose the elemnet, in order.
+     */
     get ownSyntax() : FieldDefinition[] {
         return (this.constructor as any).ownSyntax;
     }
@@ -322,6 +446,22 @@ export class BitstreamElement {
         return true;
     }
 
+    /**
+     * Read a specific group of fields from the bitstream and serialize their values into this instance. This is called
+     * by BitstreamElement for you, but can be used when overriding the default read behavior.
+     * @param bitstream The bitstream reader to read from
+     * @param name The name of the group to read. Some special values are accepted: '*' means all fields, '$*' means all
+     *              fields defined directly on this class (excluding its superclasses). Other group specifiers starting 
+     *              with '$' match fields defined directly on this class which are part of the specified group (for 
+     *              instance '$foo' matches directly defined fields in the 'foo' group). Otherwise, the string is 
+     *              matched directly against the 'group' option of all fields.
+     * @param variator A function which implements variation of this instance in the case where a `@VariantMarker` is 
+     *              encountered. The function should determine an appropriate variant and return it; when it does so,
+     *              the group will continue to be read after the marker, but the results of reading the field will be
+     *              applied to the returned instance instead of this instance
+     * @param options Serialization options that modify how the group is read. Most notably this allows you to skip 
+     *              specific fields.
+     */
     protected async readGroup(bitstream : BitstreamReader, name : string, variator : () => Promise<this>, options? : SerializeOptions) {
         let syntax : FieldDefinition[];
         
@@ -418,6 +558,14 @@ export class BitstreamElement {
         }
     }
 
+    /**
+     * Write a group of fields to the given bitstream writer. This is used by BitstreamElement internally, but it can 
+     * be called directly when overriding the default write behavior in a subclass, if desired. 
+     * @param bitstream The bitstream writer to write the fields to
+     * @param name The name of the group to write. 
+     * @param options Options that modify how the group is written. Most notably this allows you to skip specific 
+     *                  fields.
+     */
     protected writeGroup(bitstream : BitstreamWriter, name : string, options? : SerializeOptions) {
         let syntax = this.syntax;
         for (let element of syntax) {
@@ -452,14 +600,39 @@ export class BitstreamElement {
         }
     }
 
+    /**
+     * Read this element from the given bitstream reader, applying the resulting values into this instance.
+     * @param bitstream The reader to read from
+     * @param variator A function which implements variation for this instance. The function should determine an 
+     *                  appropriate variant instance and return it; from there on out the rest of the fields read will 
+     *                  be applied to that instance instead of this instance.
+     * @param options Options which modify how the element is read. Most notably this lets you skip specific fields
+     */
     async read(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
         await this.readGroup(bitstream, '*', variator, options);
     }
 
+    /**
+     * Read just the fields that are part of this specific subclass, ignoring the fields that are defined on superclasses.
+     * This is used by BitstreamElement during variation, and is equivalent to readGroup(bitstream, '$*', variator, options)
+     * @param bitstream The reader to read from
+     * @param variator A function which implements variation for this instance. The function should determine an 
+     *                  appropriate variant instance and return it; from there on out the rest of the fields read will 
+     *                  be applied to that instance instead of this instance.
+     * @param options Options which modify how the element is read. Most notably this lets you skip specific fields
+     */
     async readOwn(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
         await this.readGroup(bitstream, '$*', variator, options);
     }
 
+    /**
+     * Create a new instance of this BitstreamElement subclass by reading the necessary fields from the given 
+     * BitstreamReader.
+     * @param this 
+     * @param bitstream The reader to read from
+     * @param parent Specify a parent instance which the new instance is found within
+     * @returns 
+     */
     static async read<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader, parent? : BitstreamElement) : Promise<T> {
         return <any> await new StructureSerializer().read(bitstream, this, null, null);
     }
@@ -477,16 +650,19 @@ export class BitstreamElement {
         return this.read(reader);
     }
 
+    /**
+     * Write this instance to the given writer
+     * @param bitstream The writer to write to
+     * @param options Options which modify how the element is written. Most notably this lets you skip specific fields
+     */
     write(bitstream : BitstreamWriter, options? : SerializeOptions) {
         this.writeGroup(bitstream, '*', options);
     }
 
     /**
-     * Apply the given properties to this object 
-     * and return ourself.
-     * 
+     * Apply the given properties to this object and return ourself.
      * @param this 
-     * @param changes 
+     * @param changes The changes to apply
      */
     with<T>(this : T, changes : Partial<T>): T {
         Object.assign(this, changes);

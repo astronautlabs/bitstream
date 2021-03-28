@@ -8,6 +8,5 @@ export * from './buffer-options';
 export * from './field';
 export * from './constructor';
 export * from './discriminant';
-export * from './deserializer';
 export * from './serializer';
 export * from './variant';

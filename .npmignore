@@ -1,2 +1,9 @@
 node_modules/
 debug.log
+
+src/test.ts
+src/**/*.test.ts
+dist/test.js
+dist/**/*.test.js
+src/benchmark.ts
+dist/benchmark.js
