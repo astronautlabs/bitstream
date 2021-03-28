@@ -328,10 +328,10 @@ export class StructureSerializer implements Serializer {
             });
 
             //console.log(`Reading own values of ${element.constructor.name}`);
-            await element.readOwn(reader, variator, { skip: defn.options?.skip });
+            await element.readOwn(reader, variator, { skip: defn?.options?.skip });
         } else {
             //console.log(`Reading values of ${element.constructor.name}`);
-            await element.read(reader, variator, { skip: defn.options?.skip });
+            await element.read(reader, variator, { skip: defn?.options?.skip });
         }
 
         if (globalThis.BITSTREAM_TRACE)
