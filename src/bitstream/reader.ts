@@ -17,7 +17,80 @@ export class BitstreamReader {
     private buffers : Buffer[] = [];
     private bufferedLength : number = 0;
     private blockedRequest : BitstreamRequest = null;
-    private offset = 0;
+    private _offsetIntoBuffer = 0;
+    private _bufferIndex = 0;
+    private _offset = 0;
+    private _spentBufferSize = 0;
+
+    /**
+     * Get the index of the buffer currently being read. This will always be zero unless retainBuffers=true
+     */
+    get bufferIndex() {
+        return this._bufferIndex;
+    }
+
+    /**
+     * Get the current offset in bits, starting from the very first bit read by this reader (across all 
+     * buffers added)
+     */
+    get offset() {
+        return this._offset;
+    }
+
+    /**
+     * The total number of bits which were in buffers that have previously been read, and have since been discarded.
+     */
+    get spentBufferSize() {
+        return this._spentBufferSize;
+    }
+
+    /**
+     * Set the current offset in bits, as measured from the very first bit read by this reader (across all buffers
+     * added). If the given offset points into a previously discarded buffer, an error will be thrown. See the 
+     * retainBuffers option if you need to seek back into previous buffers. If the desired offset is in a previous
+     * buffer which has not been discarded, the current read head is moved into the appropriate offset of that buffer.
+     */
+    set offset(value) {
+        if (value < this._spentBufferSize) {
+            throw new Error(
+                `Offset ${value} points into a discarded buffer! ` 
+                + `If you need to seek backwards outside the current buffer, make sure to set retainBuffers=true`
+            );
+        }
+
+        value -= this._spentBufferSize;
+        let bufferIndex = 0;
+        
+        for (let buf of this.buffers) {
+            let size = buf.length * 8;
+            if (value < size) {
+                this._bufferIndex = bufferIndex;
+                this._offset = value;
+                return;
+            }
+
+            value -= size;
+            ++bufferIndex;
+        }
+    }
+
+    /**
+     * When true, buffers are not removed, which allows the user to 
+     * "rewind" the current offset back into buffers that have already been 
+     * visited. If you enable this, you will need to remove buffers manually using 
+     * clean()
+     */
+    retainBuffers : boolean = false;
+
+    /**
+     * Remove any fully used up buffers. Only has an effect if retainBuffers is true.
+     * Optional `count` parameter lets you control how many buffers can be freed.
+     */
+    clean(count?) {
+        let buffers = this.buffers.splice(0, count !== void 0 ? Math.min(count, this._bufferIndex) : this._bufferIndex);
+        this._spentBufferSize += buffers.map(b => b.length * 8).reduce((pv, cv) => pv + cv, 0);
+        this._bufferIndex -= buffers.length;
+    }
 
     /**
      * The number of bits that are currently available.
@@ -141,8 +214,8 @@ export class BitstreamReader {
         
         this.adjustSkip();
 
-        let offset = this.offset;
-        let bufferIndex = 0;
+        let offset = this._offsetIntoBuffer;
+        let bufferIndex = this._bufferIndex;
 
         let bitLength = 0;
 
@@ -169,9 +242,13 @@ export class BitstreamReader {
         }
 
         if (consume) {
-            this.buffers.splice(0, bufferIndex);
             this.bufferedLength -= length;
-            this.offset = offset;
+            this._offsetIntoBuffer = offset;
+            this._offset += bitLength;
+            this._bufferIndex = bufferIndex;
+            if (!this.retainBuffers) {
+                this.clean();
+            }
         }
 
         return Number(value);
@@ -182,9 +259,9 @@ export class BitstreamReader {
             return;
         
         // First, remove any buffers that are completely skipped
-        while (this.buffers && this.skippedLength > this.buffers[0].length*8-this.offset) {
-            this.skippedLength -= (this.buffers[0].length*8 - this.offset);
-            this.offset = 0;
+        while (this.buffers && this.skippedLength > this.buffers[0].length*8-this._offsetIntoBuffer) {
+            this.skippedLength -= (this.buffers[0].length*8 - this._offsetIntoBuffer);
+            this._offsetIntoBuffer = 0;
             this.buffers.shift();
         }
 
@@ -192,7 +269,7 @@ export class BitstreamReader {
         // less than the full length of the buffer, so entirely consume the skipped length
         // by putting it into the offset.
         if (this.buffers.length > 0) {
-            this.offset += this.skippedLength;
+            this._offsetIntoBuffer += this.skippedLength;
             this.skippedLength = 0;
         }
     }
