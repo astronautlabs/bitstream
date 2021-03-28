@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "private": false,
   "scripts": {
-    "build": "tsc -p .",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc -b",
     "test": "npm run build && node dist/test",
     "benchmark": "npm run build && node dist/benchmark",
     "prepublishOnly": "npm test"
@@ -26,6 +27,7 @@
     "@types/stream-buffers": "^3.0.3",
     "chai": "^4.2.0",
     "razmin": "^0.6.20",
+    "rimraf": "^3.0.2",
     "typescript": "^4.0.3"
   },
   "dependencies": {
