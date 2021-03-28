@@ -464,6 +464,19 @@ export class BitstreamElement {
         return <any> await new StructureSerializer().read(bitstream, this, null, null);
     }
 
+    /**
+     * Deserialize an instance of this class from the given
+     * data buffer. Will consider available variants, so the 
+     * result could be a subclass.
+     * @param data 
+     * @returns 
+     */
+    static async deserialize(data : Buffer | ArrayBuffer) {
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from(data));
+        return this.read(reader);
+    }
+
     write(bitstream : BitstreamWriter, options? : SerializeOptions) {
         this.writeGroup(bitstream, '*', options);
     }
