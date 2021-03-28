@@ -1,31 +1,8 @@
-import { Constructor } from "./constructor";
-import { Discriminant } from "./discriminant";
+import { Constructor, Discriminant } from "../common";
 import { Field } from "./field";
+import { VariantDefinition } from "./variant-definition";
+import { VariantOptions } from "./variant-options";
 
-/**
- * Defines the structure of a Variant subclass of a BitstreamElement superclass.
- * 
- * @see Variant
- * @see VariantMarker
- */
-export interface VariantDefinition {
-    type : Constructor;
-    discriminant : Discriminant;
-    options : VariantOptions;
-}
-
-/**
- * Defines options for a `@Variant` subclass of a BitstreamElement superclass. 
- */
-export interface VariantOptions {
-    /**
-     * Determine the order in which this variant should be considered during variation.
-     * The special values "first" and "last" are used to force the variant to be considered
-     * before all others or after all others respectively. Otherwise the value is a number, with
-     * lower numbers being considered before higher numbers.
-     */
-    priority? : 'first' | 'last' | number;
-}
 
 /**
  * Decorator which can be applied to subclasses of a BitstreamElement class which marks the subclass 

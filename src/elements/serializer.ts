@@ -1,8 +1,6 @@
+import { BitstreamReader, BitstreamWriter } from "../bitstream";
 import { BitstreamElement } from "./element";
-import { FieldOptions } from "./field-options";
-import { BitstreamReader } from "./reader";
-import { FieldDefinition } from "./syntax-element";
-import { BitstreamWriter } from "./writer";
+import { FieldDefinition } from "./field-definition";
 
 /**
  * The abstract interface of a value serializer used within BitstreamElement.

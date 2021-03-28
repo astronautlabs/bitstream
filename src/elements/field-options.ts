@@ -1,10 +1,10 @@
+import { StringEncodingOptions } from "../bitstream";
 import { ArrayOptions } from "./array-options";
 import { BufferOptions } from "./buffer-options";
-import { Discriminant } from "./discriminant";
-import { ValueDeterminant } from "./field";
+import { Discriminant } from "../common";
 import { Serializer } from "./serializer";
-import { StringEncodingOptions } from "./string-encoding-options";
-import { VariantDefinition } from "./variant";
+import { ValueDeterminant } from "./value-determinant";
+import { VariantDefinition } from "./variant-definition";
 
 /**
  * Defines options available for properties marked with `@Field()` within BitstreamElement classes.

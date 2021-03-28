@@ -1,6 +1,6 @@
 import { countReset } from 'console';
 import { Readable } from 'stream';
-import { BitstreamReader } from './reader';
+import { BitstreamReader } from './bitstream';
 export class FPSCounter {
     constructor(
         public label : string,

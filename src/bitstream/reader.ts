@@ -1,5 +1,3 @@
-import { Transform } from "stream";
-import { Constructor } from "./constructor";
 import { StringEncodingOptions } from "./string-encoding-options";
 
 /**

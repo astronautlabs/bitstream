@@ -1,8 +1,8 @@
 import { expect } from "chai";
 import { describe } from "razmin";
+import { BitstreamReader } from "../bitstream";
 import { BitstreamElement } from "./element";
 import { Field } from "./field";
-import { BitstreamReader } from "./reader";
 
 describe('BitstreamElement', it => {
     it('correctly deserializes a basic element in synchronous mode', async () => {

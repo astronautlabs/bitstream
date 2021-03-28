@@ -1,5 +1,5 @@
-import { Discriminant } from "./discriminant";
-import { LengthDeterminant } from "./field";
+import { Discriminant } from "../common";
+import { LengthDeterminant } from "./length-determinant";
 
 export interface ArrayOptions {
     /**

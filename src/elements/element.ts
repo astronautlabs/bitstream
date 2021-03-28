@@ -1,10 +1,9 @@
 import { WritableStreamBuffer } from "stream-buffers";
-import { Constructor } from "./constructor";
-import { StructureSerializer } from "./field";
-import { BitstreamReader } from "./reader";
-import { FieldDefinition } from "./syntax-element";
-import { VariantDefinition } from "./variant";
-import { BitstreamMeasurer, BitstreamWriter } from "./writer";
+import { BitstreamMeasurer, BitstreamReader, BitstreamWriter } from "../bitstream";
+import { Constructor } from "../common";
+import { StructureSerializer } from "./structure-serializer";
+import { FieldDefinition } from "./field-definition";
+import { VariantDefinition } from "./variant-definition";
 
 /**
  * A reference to a field. Can be a string/symbol or a type-safe function 

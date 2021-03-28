@@ -1,5 +1,5 @@
-import { LengthDeterminant } from "./field";
 import { FieldOptions } from "./field-options";
+import { LengthDeterminant } from "./length-determinant";
 
 /**
  * Defines the structure of a field definition within a BitstreamElement superclass.
