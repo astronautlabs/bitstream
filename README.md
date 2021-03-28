@@ -3,11 +3,6 @@
 [![npm](https://img.shields.io/npm/v/@astronautlabs/bitstream)](https://npmjs.com/package/@astronautlabs/bitstream)
 [![CircleCI](https://circleci.com/gh/astronautlabs/bitstream.svg?style=svg)](https://circleci.com/gh/astronautlabs/bitstream)
 
-> **Alpha Quality**  
-> This software is very new and unstable. Use with caution, and avoid use in 
-> production without careful consideration. Major API changes may be made 
-> frequently.
-
 Typescript utility library for reading and writing to "bitstreams", that is, tightly packed binary streams containing 
 fields of varying lengths of bits. This package lets you treat a series of bytes as a series of bits without needing to manage which bytes the desired fields fall within. Bitstreams are most useful when implementing network protocols and data formats (both encoders and decoders).
 
