@@ -156,6 +156,8 @@ export class BitstreamElement {
             }
         }
 
+        writer.end();
+
         return <Buffer>stream.getContents();
     }
 

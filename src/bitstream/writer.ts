@@ -19,6 +19,27 @@ export class BitstreamWriter {
     private buffer : Buffer;
     private bufferedBytes = 0;
 
+    end() {
+        this.finishByte();
+        this.flush();
+    }
+
+    private finishByte() {
+        if (this.pendingBits > 0) {
+            this.buffer[this.bufferedBytes++] = Number(this.pendingByte);
+            this.pendingBits = 0;
+            this.pendingByte = BigInt(0);
+        }
+    }
+    
+    flush() {
+        if (this.bufferedBytes > 0) {
+            this.stream.write(this.buffer); // TODO: callback
+            this.buffer = Buffer.alloc(this.bufferSize);
+            this.bufferedBytes = 0;
+        }
+    }
+
     /**
      * Decode a string into a set of bytes and write it to the bitstream, bounding the string
      * by the given number of bytes, optionally using the given encoding (or UTF-8 if not specified).
@@ -76,14 +97,10 @@ export class BitstreamWriter {
             valueN = valueN % BigInt(Math.pow(2, remainingLength));
 
             if (this.pendingBits === 8) {
-                this.buffer[this.bufferedBytes++] = Number(this.pendingByte);
-                this.pendingBits = 0;
-                this.pendingByte = BigInt(0);
+                this.finishByte();
 
                 if (this.bufferedBytes >= this.buffer.length) {
-                    this.stream.write(this.buffer); // TODO: callback
-                    this.buffer = Buffer.alloc(this.bufferSize);
-                    this.bufferedBytes = 0;
+                    this.flush();
                 }
             }
         }
