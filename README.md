@@ -252,7 +252,4 @@ reading. This can be very helpful when your protocol descriptions have too many 
 
 # Contributing
 
-Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
-This library is in heavy development. It is changing rapidly by the day. We highly recommend 
-you open an issue to discuss the work you want to do before you start working, or risk 
-inadvertently clashing with rapid changes being made to the codebase.
+We encourage you to file issues and send pull requests! Please be sure to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
