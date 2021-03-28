@@ -102,12 +102,9 @@ export class BitstreamElement {
                 
                 toRef = this.syntax[toIndex].name;
             } else if (this.isBeingRead) {
-                //console.log(`${this.constructor.name}: Autodetermining last read field from ${JSON.stringify(this.readFields)}`);
                 let readFields = this.syntax.filter(x => this.readFields.includes(x.name)).map(x => x.name);
                 toRef = readFields[readFields.length - 1];
-                //console.log(`${this.constructor.name}: Selected ${String(readFields[readFields.length - 1])} as end of measure range`);
             } else {
-                //console.log(`${this.constructor.name} is not being read, so grabbing last field`);
                 toRef = this.syntax[this.syntax.length - 1].name;
             }
         }
@@ -128,8 +125,6 @@ export class BitstreamElement {
 
         if (!autoPad && length % 8 !== 0)
             throw new Error(`Cannot serialize ${length} bits evenly into ${Math.ceil(length / 8)} bytes`);
-
-        //console.log(`Measuring from ${String(from.name)} [${fromIndex}] to ${String(to.name)} [${toIndex}]`);
 
         for (let i = fromIndex, max = toIndex; i <= max; ++i) {
             let field = this.syntax[i];
@@ -186,12 +181,9 @@ export class BitstreamElement {
                 
                 toRef = this.syntax[toIndex].name;
             } else if (this.isBeingRead) {
-                //console.log(`${this.constructor.name}: Autodetermining last read field from ${JSON.stringify(this.readFields)}`);
                 let readFields = this.syntax.filter(x => this.readFields.includes(x.name)).map(x => x.name);
                 toRef = readFields[readFields.length - 1];
-                //console.log(`${this.constructor.name}: Selected ${String(readFields[readFields.length - 1])} as end of measure range`);
             } else {
-                //console.log(`${this.constructor.name} is not being read, so grabbing last field`);
                 toRef = this.syntax[this.syntax.length - 1].name;
             }
         }
@@ -208,7 +200,6 @@ export class BitstreamElement {
             throw new Error(`Cannot measure from field ${fromIndex} (${String(from.name)}) to ${toIndex} (${String(to.name)}): First field comes after last field`);
         }
 
-        //console.log(`Measuring from ${String(from.name)} [${fromIndex}] to ${String(to.name)} [${toIndex}]`);
 
         for (let i = fromIndex, max = toIndex; i <= max; ++i) {
             let field = this.syntax[i];
@@ -225,7 +216,6 @@ export class BitstreamElement {
             }
         }
 
-        //console.log(`${this.constructor.name}#${String(fieldBeingRead?.name) || '<none>'}: Measure('${String(from.name)}', '${String(to.name)}'): ${measurer.bitLength} bits`);
         return measurer.bitLength;
     }
     
@@ -432,14 +422,12 @@ export class BitstreamElement {
     private isPresent(element : FieldDefinition, instance : this) {
         if (element.options.presentWhen) {
             if (!instance.runWithFieldBeingComputed(element, () => element.options.presentWhen(instance))) {
-                //console.log(`${this.constructor.name}#${String(element.name)}: Skipping field [presentWhen failed]`);
                 return false;
             }
         }
 
         if (element.options.excludedWhen) {
             if (instance.runWithFieldBeingComputed(element, () => element.options.excludedWhen(instance))) {
-                //console.log(`${this.constructor.name}#${String(element.name)}: Skipping field [excludedWhen passed]`);
                 return false;
             }
         }
