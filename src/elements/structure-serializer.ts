@@ -1,7 +1,6 @@
 import { BitstreamElement } from "./element";
 import { Serializer } from "./serializer";
 import { FieldDefinition } from "./field-definition";
-import { VariantDefinition } from "./variant-definition";
 import { BitstreamReader, BitstreamWriter } from "../bitstream";
 
 /**
