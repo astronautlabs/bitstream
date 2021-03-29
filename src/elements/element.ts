@@ -23,6 +23,12 @@ export interface SerializeOptions {
     skip? : (string | symbol)[];
 }
 
+export interface ReadOptions<T = BitstreamElement> extends SerializeOptions {
+    parent? : BitstreamElement;
+    field? : FieldDefinition;
+    variator? : () => Promise<T>;
+}
+
 /**
  * BitstreamElement is a base class which can be extended to produce "structures" that can be 
  * read from and written to a bitstream. It allows you to specify fields along with their type
@@ -46,6 +52,32 @@ export class BitstreamElement {
             syntax.push(...ownSyntax);
 
         return syntax;
+    }
+
+    determineVariantType(parent? : BitstreamElement, variants? : (Function | VariantDefinition)[]) {
+        let elementType : any = this.constructor;
+        variants ??= elementType['variants'] || [];
+        
+        let variantDefns = variants.map((typeOrVariant : any) => 
+            typeof typeOrVariant === 'function' 
+                ? (<VariantDefinition>{ type: typeOrVariant, discriminant: typeOrVariant.variantDiscriminant })
+                : typeOrVariant
+        );
+
+        variantDefns = variantDefns.sort((a, b) => {
+            let aPriority = a.options.priority || 0;
+            let bPriority = b.options.priority || 0;
+
+            if (aPriority === 'first') aPriority = Number.MIN_SAFE_INTEGER;
+            if (aPriority === 'last') aPriority = Number.MAX_SAFE_INTEGER;
+            
+            if (bPriority === 'first') bPriority = Number.MIN_SAFE_INTEGER;
+            if (bPriority === 'last') bPriority = Number.MAX_SAFE_INTEGER;
+            
+            return aPriority - bPriority;
+        });
+        
+        return variantDefns.find(v => v.discriminant(this, parent))?.type;
     }
 
     /**
@@ -450,101 +482,122 @@ export class BitstreamElement {
      *              applied to the returned instance instead of this instance
      * @param options Serialization options that modify how the group is read. Most notably this allows you to skip 
      *              specific fields.
+     * @returns The current instance, unless the instance was variated into a subclass, in which case it will be the 
+     *              variated subclass instance. Because this process can occur, it is important to observe the result 
+     *              of this function.
      */
-    protected async readGroup(bitstream : BitstreamReader, name : string, variator : () => Promise<this>, options? : SerializeOptions) {
-        let syntax : FieldDefinition[];
-        
-        if (name === '*') { // all my fields
-            syntax = this.syntax;
-        } else if (name === '$*') { // all my own fields
-            syntax = this.ownSyntax;
-        } else if (name.startsWith('$')) { // my own fields in group $<group>
-            // if (name !== '*' && element.options.group !== name)
-            let group = name.slice(1);
-            syntax = this.ownSyntax.filter(x => x.options.group === group);
-        } else { // all my fields in group <group>
-            syntax = this.ownSyntax.filter(x => x.options.group === name);
-        }
-
+    protected async readGroup(
+        bitstream : BitstreamReader, 
+        name : string, 
+        options? : ReadOptions<this>
+    ) {
+        let wasBeingRead = this.isBeingRead;
         let instance = this;
 
-        for (let element of syntax) {
+        instance.isBeingRead = true;
 
-            // Preconditions 
-
-            if (!this.isPresent(element, instance))
-                continue;
-                
-            if (options?.skip && options.skip.includes(element.name))
-                continue;
-
-            if (element.options.isVariantMarker && variator) {
-                if (globalThis.BITSTREAM_TRACE)
-                    console.log(`Variating at marker...`);
-                instance = await variator();
-                if (!instance)
-                    throw new Error(`Variator did not return a value!`);
-                
-                continue;
+        try {
+            let syntax : FieldDefinition[];
+            
+            if (name === '*') { // all my fields
+                syntax = this.syntax;
+            } else if (name === '$*') { // all my own fields
+                syntax = this.ownSyntax;
+            } else if (name.startsWith('$')) { // my own fields in group $<group>
+                // if (name !== '*' && element.options.group !== name)
+                let group = name.slice(1);
+                syntax = this.ownSyntax.filter(x => x.options.group === group);
+            } else { // all my fields in group <group>
+                syntax = this.ownSyntax.filter(x => x.options.group === name);
             }
 
-            // Parsing 
+            for (let element of syntax) {
 
-            let traceTimeout;
-            if (globalThis.BITSTREAM_TRACE === true) {
-                traceTimeout = setTimeout(() => {
-                    console.log(`[!!] ${element.containingType.name}#${String(element.name)}: Stuck reading!`);
-                }, 5000);
-            }
+                // Preconditions 
 
-            try {
-                let readValue = await element.options.serializer.read(bitstream, element.type, instance, element);
-                if (!element.options.isIgnored)
-                    instance[element.name] = readValue;
-                instance.readFields.push(element.name);
+                if (!this.isPresent(element, instance))
+                    continue;
+                    
+                if (options?.skip && options.skip.includes(element.name))
+                    continue;
 
-                let displayedValue = `${readValue}`;
-
-                if (typeof readValue === 'number') {
-                    displayedValue = `0x${readValue.toString(16)} [${readValue}]`;
+                if (element.options.isVariantMarker) {
+                    if (globalThis.BITSTREAM_TRACE)
+                        console.log(`Variating at marker...`);
+                    
+                    if (options.variator)
+                        instance = await options.variator();
+                    else
+                        instance = await this.variate(bitstream, options.parent, options.field);
+                    
+                    if (!instance)
+                        throw new Error(`Variator did not return a value!`);
+                    
+                    continue;
                 }
 
+                // Parsing 
+
+                let traceTimeout;
                 if (globalThis.BITSTREAM_TRACE === true) {
-                    try {
-                        console.log(
-                            `[ + ${
-                                this.leftPad(instance.measureField(element.name), 4)
-                                } bit(s) = ${
-                                    this.leftPad(Math.floor(instance.measureTo(element.name) / 8), 4)
-                                } byte(s), ${
-                                    this.leftPad(
-                                        instance.measureTo(element.name)
-                                        - Math.floor(instance.measureTo(element.name) / 8)*8
-                                    , 4)
-                                } bits = ${this.leftPad(instance.measureTo(element.name), 4)} bits total] `
-                            + 
-                            `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} => ${displayedValue}`
-                        );
-                    } catch (e) {
-                        console.log(`Error while tracing read operation for element ${String(element.name)}: ${e.message}`);
-                        console.error(e);
+                    traceTimeout = setTimeout(() => {
+                        console.log(`[!!] ${element.containingType.name}#${String(element.name)}: Stuck reading!`);
+                    }, 5000);
+                }
+
+                try {
+                    let readValue = await element.options.serializer.read(bitstream, element.type, instance, element);
+                    if (!element.options.isIgnored)
+                        instance[element.name] = readValue;
+                    instance.readFields.push(element.name);
+
+                    let displayedValue = `${readValue}`;
+
+                    if (typeof readValue === 'number') {
+                        displayedValue = `0x${readValue.toString(16)} [${readValue}]`;
                     }
 
-                    clearTimeout(traceTimeout);
-                }
-            } catch (thrown) {
-                let e : Error = thrown;
-                if (e.message.startsWith('underrun:')) {
-                    throw new Error(
-                        `Ran out of bits while deserializing field ${String(element.name)} ` 
-                        + `in group '${name}' ` 
-                        + `of element ${instance.constructor.name}`
-                    );
-                } else {
-                    throw e;
+                    if (globalThis.BITSTREAM_TRACE === true) {
+                        try {
+                            console.log(
+                                `[ + ${
+                                    this.leftPad(instance.measureField(element.name), 4)
+                                    } bit(s) = ${
+                                        this.leftPad(Math.floor(instance.measureTo(element.name) / 8), 4)
+                                    } byte(s), ${
+                                        this.leftPad(
+                                            instance.measureTo(element.name)
+                                            - Math.floor(instance.measureTo(element.name) / 8)*8
+                                        , 4)
+                                    } bits = ${this.leftPad(instance.measureTo(element.name), 4)} bits total] `
+                                + 
+                                `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} => ${displayedValue}`
+                            );
+                        } catch (e) {
+                            console.log(`Error while tracing read operation for element ${String(element.name)}: ${e.message}`);
+                            console.error(e);
+                        }
+
+                        clearTimeout(traceTimeout);
+                    }
+                } catch (thrown) {
+                    let e : Error = thrown;
+                    if (e.message.startsWith('underrun:')) {
+                        throw new Error(
+                            `Ran out of bits while deserializing field ${String(element.name)} ` 
+                            + `in group '${name}' ` 
+                            + `of element ${instance.constructor.name}`
+                        );
+                    } else {
+                        throw e;
+                    }
                 }
             }
+        } finally {
+            this.isBeingRead = wasBeingRead;
         }
+
+        return instance;
     }
 
     /**
@@ -596,9 +649,11 @@ export class BitstreamElement {
      *                  appropriate variant instance and return it; from there on out the rest of the fields read will 
      *                  be applied to that instance instead of this instance.
      * @param options Options which modify how the element is read. Most notably this lets you skip specific fields
+     * @returns The current instance, unless it was variated into a subclass instance, in which case it will be the 
+     *                  variated subclass instance. Thus it is important to observe the result of this method.
      */
     async read(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
-        await this.readGroup(bitstream, '*', variator, options);
+        return await this.readGroup(bitstream, '*', { variator, ...options });
     }
 
     /**
@@ -609,21 +664,78 @@ export class BitstreamElement {
      *                  appropriate variant instance and return it; from there on out the rest of the fields read will 
      *                  be applied to that instance instead of this instance.
      * @param options Options which modify how the element is read. Most notably this lets you skip specific fields
+     * @returns The current instance, unless it was variated into a subclass instance, in which case it will be the 
+     *                  variated subclass instance. Thus it is important to observe the result of this method.
      */
     async readOwn(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
-        await this.readGroup(bitstream, '$*', variator, options);
+        return await this.readGroup(bitstream, '$*', { variator, ...options });
+    }
+
+    async variate(reader : BitstreamReader, parent? : BitstreamElement, defn? : FieldDefinition) {
+        let variantType = this.determineVariantType(parent, defn?.options.variants);
+        if (variantType)
+            return await variantType.read(reader, parent, defn, this);
+
+        return this;
     }
 
     /**
      * Create a new instance of this BitstreamElement subclass by reading the necessary fields from the given 
      * BitstreamReader.
      * @param this 
-     * @param bitstream The reader to read from
+     * @param reader The reader to read from
      * @param parent Specify a parent instance which the new instance is found within
      * @returns 
      */
-    static async read<T extends BitstreamElement>(this : Constructor<T>, bitstream : BitstreamReader, parent? : BitstreamElement) : Promise<T> {
-        return <any> await new StructureSerializer().read(bitstream, this, null, null);
+    static async read<T extends BitstreamElement>(
+        this : Constructor<T>, 
+        reader : BitstreamReader, 
+        parent? : BitstreamElement, 
+        defn? : FieldDefinition, 
+        elementBeingVariated? : BitstreamElement
+    ) : Promise<T> {
+        let element : T = new this();
+        element.parent = parent;
+
+        let parentStillReading = elementBeingVariated ? elementBeingVariated.isBeingRead : false;
+        element.isBeingRead = true;
+
+        let variator = async () => {
+            let variantType = element.determineVariantType(parent, defn?.options.variants);
+            if (variantType)
+                return await variantType.read(reader, parent, defn, element);
+
+            return element;
+        };
+
+        if (elementBeingVariated) {
+            element.syntax.forEach(f => {
+                if (defn?.options?.skip && defn.options.skip.includes(f.name))
+                    return;
+
+                if (elementBeingVariated.syntax.some(x => x.name === f.name) && elementBeingVariated.readFields.includes(f.name)) {
+                    if (!f.options.isIgnored)
+                        element[f.name] = elementBeingVariated[f.name];
+                    element.readFields.push(f.name);
+                }
+            });
+
+            element = await element.readOwn(reader, variator, { skip: defn?.options?.skip });
+        } else {
+            element = await element.read(reader, variator, { skip: defn?.options?.skip });
+        }
+
+        if (globalThis.BITSTREAM_TRACE)
+            console.log(`Done reading ${element.constructor.name}, isBeingRead=${parentStillReading}`);
+        element.isBeingRead = parentStillReading;
+
+        if (!element.ownSyntax.some(x => x.options.isVariantMarker)) {
+            if (globalThis.BITSTREAM_TRACE)
+                console.log(`** Variating ${element.constructor.name}`);
+            element = await variator();
+        }
+        
+        return element;
     }
 
     /**
