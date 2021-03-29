@@ -1,7 +1,6 @@
 import { WritableStreamBuffer } from "stream-buffers";
 import { BitstreamMeasurer, BitstreamReader, BitstreamWriter } from "../bitstream";
 import { Constructor } from "../common";
-import { StructureSerializer } from "./structure-serializer";
 import { FieldDefinition } from "./field-definition";
 import { VariantDefinition } from "./variant-definition";
 
