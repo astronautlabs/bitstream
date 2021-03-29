@@ -1,7 +1,15 @@
 import { WritableStreamBuffer } from "stream-buffers";
 import { BitstreamMeasurer, BitstreamReader, BitstreamWriter } from "../bitstream";
 import { Constructor } from "../common";
+import { StructureSerializer } from "./structure-serializer";
+import { ArraySerializer } from "./array-serializer";
+import { BooleanSerializer } from "./boolean-serializer";
+import { BufferSerializer } from "./buffer-serializer";
 import { FieldDefinition } from "./field-definition";
+import { NullSerializer } from "./null-serializer";
+import { NumberSerializer } from "./number-serializer";
+import { resolveLength } from "./resolve-length";
+import { StringSerializer } from "./string-serializer";
 import { VariantDefinition } from "./variant-definition";
 
 /**
@@ -35,6 +43,8 @@ export interface ReadOptions<T = BitstreamElement> extends SerializeOptions {
  * serialization/deserialization in the context of a passed BitstreamReader/BitstreamWriter.
  */
 export class BitstreamElement {
+    static generatedReader : (reader : BitstreamReader, parent? : BitstreamElement) => Generator<number, BitstreamElement>;
+
     /**
      * Retrieve the "syntax" of this element, which is the list of fields defined on the element 
      * in order of appearance within the bitstream.
@@ -686,14 +696,28 @@ export class BitstreamElement {
      * @param parent Specify a parent instance which the new instance is found within
      * @returns 
      */
-    static async read<T extends BitstreamElement>(
-        this : Constructor<T>, 
+    static async read<T extends typeof BitstreamElement>(
+        this : T, 
         reader : BitstreamReader, 
         parent? : BitstreamElement, 
         defn? : FieldDefinition, 
         elementBeingVariated? : BitstreamElement
-    ) : Promise<T> {
-        let element : T = new this();
+    ) : Promise<InstanceType<T>> {
+        if (globalThis.BITSTREAM_OPTIMIZE_PROMISES) {
+            let iterator = <Generator<number, InstanceType<T>>> this.generatedReader(reader, parent);
+            do {
+                let result = iterator.next();
+                if (result.done === false) {
+                    // we need more bits, await
+                    await reader.assure(result.value);
+                    continue;
+                }
+        
+                return result.value;
+            } while (true);
+        }
+
+        let element = new this();
         element.parent = parent;
 
         let parentStillReading = elementBeingVariated ? elementBeingVariated.isBeingRead : false;
@@ -734,7 +758,7 @@ export class BitstreamElement {
             element = await variator();
         }
         
-        return element;
+        return <InstanceType<T>> element;
     }
 
     /**
@@ -768,4 +792,146 @@ export class BitstreamElement {
         Object.assign(this, changes);
         return this;
     }
+
+    /**
+     * Perform a synchronous read operation on the given reader with the given generator. If there are not enough bits available
+     * to complete the operation, this method will throw an exception.
+     * 
+     * @param reader 
+     * @param generator 
+     * @returns 
+     */
+    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): T {
+        let iterator = <Generator<number, T>> <unknown> this.generatedReader(reader, parent);
+        do {
+            let result = iterator.next();
+            if (result.done === false)
+                throw new Error(`Not enough bits: Reached end of buffer while trying to read ${result.value} bits!`);
+
+            return result.value;
+        } while (true);
+    }
+
+    /**
+     * Try to read the bitstream using the given generator function synchronously, if there are not enough bits, abort 
+     * and return undefined.
+     * @param reader The reader to read from
+     * @param generator The generator that implements the read operation
+     * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
+     */
+    static tryReadSync<T>(reader : BitstreamReader, generator : (reader : BitstreamReader) => Generator<number, T>): T {
+        let iterator = generator(reader);
+        let previouslyRetaining = reader.retainBuffers;
+
+        reader.retainBuffers = true;
+        let startOffset = reader.offset;
+
+        do {
+            let result = iterator.next();
+            if (result.done === false) {
+                // we need more bits, fail
+                reader.offset = startOffset;
+                reader.retainBuffers = previouslyRetaining;
+                return undefined;
+            }
+
+            return result.value;
+        } while (true);
+    }
+
+    static generateReader() {
+        let elementClass = this;
+        let statements : string[] = [];
+        let F = <FieldDefinition[]>elementClass.syntax;
+        let RL = resolveLength;
+
+        function rightPad(str : string, length : number) {
+            while (str.length < length)
+                str = `${str} `;
+            return str;
+        }
+
+        function Rb(len : number, reader : BitstreamReader) {
+            let buf : Buffer = Buffer.alloc(len);
+            for (let i = 0; i < len; ++i) 
+                buf[i] = reader.readSync(8);
+            return buf;
+        }
+
+        function Ex(reader : BitstreamReader, length : number) {
+            return reader.available < length;
+        }
+        
+        statements.push(`let I = new elementClass(), R = reader, P = parent, L = 0`, ``);
+        for (let i = 0, max = F.length; i < max; ++i) {
+            let field = F[i];
+
+            let name : string;
+            
+            if (typeof field.name === 'symbol')
+                name = `F[${i}].name`;
+            else
+                name = JSON.stringify(field.name);
+            
+            let fieldRef = `I[${name}]`;
+            let statement : string;
+            let fieldAssign = `${fieldRef} = `;
+            
+            if (field.options.isVariantMarker) {
+
+            }
+
+            if (field.options.isIgnored) {
+                fieldAssign = '';
+            }
+
+            if (field.options.serializer instanceof ArraySerializer) {
+                statement = `// [ARRAY] Not yet supported!`;
+            } else if (field.options.serializer instanceof StructureSerializer) {
+                (<any>field.type).generateReader();
+                if (field.type['__reader']) {
+                    statement = `${fieldAssign}F[${i}].type.__reader(reader, I)`;
+                }
+            } else if (field.options.serializer instanceof NullSerializer) {
+                statement = `// [MARKER]`;
+            } else if (field.options.serializer instanceof StringSerializer) {
+                statement = `R.readString(L, F[${i}].options.string)`;
+            } else if (field.options.serializer instanceof NumberSerializer) {
+                statement = (`${fieldAssign}R.readSync(L)`);
+            } else if (field.options.serializer instanceof BooleanSerializer) {
+                statement = (`${fieldAssign}!!R.readSync(L)`);
+            } else if (field.options.serializer instanceof BufferSerializer) {
+                statement = `${fieldAssign}Rb(L, R)`;
+            } else {
+                if (field.options.serializer['readSync']) {
+                    statement = `${fieldAssign}F[${i}].options.serializer.readSync(R, P, F[${i}])`;
+                } else if (field.options.serializer) {
+                    throw new Error(`Serializer ${field.options.serializer.constructor.name} is not compatible with BITSTREAM_READ_MODE=v2 as it does not implement readSync()`);
+                } else {
+                    throw new Error(`Field ${String(field.name)} of type ${field.type} has no serializer and no built-in support!`);
+                }
+            }
+
+            if (field.options?.presentWhen || field.options?.excludedWhen) {
+                let conditions : string[] = [];
+                if (field.options?.presentWhen)
+                    conditions.push(`F[${i}].options.presentWhen(instance)`);
+                if (field.options?.excludedWhen)
+                    conditions.push(`!F[${i}].options.presentWhen(instance)`);
+                
+                statement = `if (${conditions.join(' && ')}) ${statement}`;
+            }
+
+            let length = `RL(F[${i}].length, P, F[${i}])`;
+
+            statements.push(`/* ${rightPad(`[${field.type.name}] ${String(field.name)}`, 40)} */ ${rightPad(`L = ${length}; if (Ex(R, L)) yield L;`, 30)} ${statement}`);
+        }
+
+        statements.push(``, `return instance`);
+        let reader = eval(`(function *read(reader, parent) {\n    ${statements.map(x => x && !x.includes(' // ') ? `${x};` : x).join("\n    ")}\n})`);
+        elementClass['__reader'] = reader;
+
+        return reader;
+    }
+
 }
