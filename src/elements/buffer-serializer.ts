@@ -8,7 +8,7 @@ import { resolveLength } from "./resolve-length";
  * Serializes buffers to/from bitstreams
  */
  export class BufferSerializer implements Serializer {
-    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         let length : number;
         
         try {
@@ -18,8 +18,12 @@ import { resolveLength } from "./resolve-length";
         }
         
         let buffer = Buffer.alloc(length);
-        for (let i = 0, max = buffer.length; i < max; ++i)
-            buffer[i] = await reader.read(8);
+        for (let i = 0, max = buffer.length; i < max; ++i) {
+            if (!reader.isAvailable(8))
+                yield 8;
+            
+            buffer[i] = reader.readSync(8);
+        }
         return buffer;
     }
 

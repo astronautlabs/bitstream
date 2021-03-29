@@ -8,8 +8,13 @@ import { FieldDefinition } from "./field-definition";
  * Serializes strings to/from bitstreams
  */
 export class StringSerializer implements Serializer {
-    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
-        return await reader.readString(resolveLength(field.length, parent, field), field.options.string);
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+        let length = resolveLength(field.length, parent, field);
+
+        if (!reader.isAvailable(length*8))
+            yield length*8;
+            
+        return reader.readStringSync(length, field.options.string);
     }
 
     write(writer : BitstreamWriter, type : any, parent : BitstreamElement, field : FieldDefinition, value : any) {

@@ -8,7 +8,7 @@ import { BitstreamReader, BitstreamWriter } from "../bitstream";
  * Serializes numbers to/from bitstreams
  */
 export class NumberSerializer implements Serializer {
-    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         let length : number;
         try {
             length = resolveLength(field.length, parent, field);
@@ -16,7 +16,10 @@ export class NumberSerializer implements Serializer {
             throw new Error(`Failed to resolve length of number via 'length' determinant: ${e.message}`);
         }
 
-        return await reader.read(length);
+        if (!reader.isAvailable(length))
+            yield length;
+        
+        return reader.readSync(length);
     }
 
     write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {

@@ -9,12 +9,14 @@ import { FieldDefinition } from "./field-definition";
  * Serializes arrays to/from bitstreams
  */
 export class ArraySerializer implements Serializer {
-    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
         let count = 0;
         let elements = [];
 
         if (field.options.array.countFieldLength) {
-            count = await reader.read(field.options.array.countFieldLength);
+            if (!reader.isAvailable(field.options.array.countFieldLength))
+                yield field.options.array.countFieldLength;
+            count = reader.readSync(field.options.array.countFieldLength);
         } else if (field.options.array.count) {
             count = resolveLength(field.options.array.count, parent, field);
         }
@@ -44,12 +46,19 @@ export class ArraySerializer implements Serializer {
                             break;
 
                         let elementLength = field.options.array.elementLength;
-                        elements.push(await reader.read(elementLength));
+
+                        if (!reader.isAvailable(elementLength))
+                            yield elementLength;
+                        
+                        elements.push(reader.readSync(elementLength));
                     } while (true);
             } else {
                 for (let i = 0; i < count; ++i) {
                     let elementLength = field.options.array.elementLength;
-                    elements.push(await reader.read(elementLength));
+                    if (!reader.isAvailable(elementLength))
+                        yield elementLength;
+
+                    elements.push(reader.readSync(elementLength));
                 }
             }
         } else {
@@ -70,8 +79,18 @@ export class ArraySerializer implements Serializer {
 
                     let element : BitstreamElement;
                     let serializer = new StructureSerializer();
+                    let gen = serializer.read(reader, <typeof BitstreamElement> field.options.array.type, parent, field);
+                    
+                    while (true) {
+                        let result = gen.next();
+                        if (result.done === false) {
+                            yield result.value;
+                        } else {
+                            element = result.value;
+                            break;
+                        }
+                    }
 
-                    element = await serializer.read(reader, field.options.array.type, parent, field);
                     elements.push(element);
                     parent[field.name].push(element);
 
@@ -80,8 +99,18 @@ export class ArraySerializer implements Serializer {
                 for (let i = 0; i < count; ++i) {
                     let element : BitstreamElement;
                     let serializer = new StructureSerializer();
+                    let g = serializer.read(reader, <typeof BitstreamElement> field.options.array.type, parent, field);
 
-                    element = await serializer.read(reader, field.options.array.type, parent, field);
+                    while (true) {
+                        let result = g.next();
+                        if (result.done === false) {
+                            yield result.value;
+                        } else {
+                            element = result.value;
+                            break;
+                        }
+                    }
+
                     elements.push(element);
                     parent[field.name].push(element);
                 }

@@ -8,8 +8,12 @@ import { FieldDefinition } from "./field-definition";
  * Serializes booleans to/from bitstreams.
  */
 export class BooleanSerializer implements Serializer {
-    async read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
-        return await reader.read(resolveLength(field.length, parent, field)) !== 0;
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+        let length = resolveLength(field.length, parent, field);
+        if (!reader.isAvailable(length))
+            yield length;
+
+        return reader.readSync(length) !== 0;
     }
 
     write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {

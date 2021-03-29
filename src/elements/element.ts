@@ -43,7 +43,17 @@ export interface ReadOptions<T = BitstreamElement> extends SerializeOptions {
  * serialization/deserialization in the context of a passed BitstreamReader/BitstreamWriter.
  */
 export class BitstreamElement {
-    static generatedReader : (reader : BitstreamReader, parent? : BitstreamElement) => Generator<number, BitstreamElement>;
+    private static _generatedReader : (
+        reader : BitstreamReader, 
+        instance : BitstreamElement, 
+        parent? : BitstreamElement,
+        defn? : FieldDefinition,
+        own? : boolean
+    ) => Generator<number, BitstreamElement>;
+    static get generatedReader() {
+        this.generateReader();
+        return this._generatedReader;
+    }
 
     /**
      * Retrieve the "syntax" of this element, which is the list of fields defined on the element 
@@ -495,7 +505,7 @@ export class BitstreamElement {
      *              variated subclass instance. Because this process can occur, it is important to observe the result 
      *              of this function.
      */
-    protected async readGroup(
+    protected *readGroup(
         bitstream : BitstreamReader, 
         name : string, 
         options? : ReadOptions<this>
@@ -534,10 +544,16 @@ export class BitstreamElement {
                     if (globalThis.BITSTREAM_TRACE)
                         console.log(`Variating at marker...`);
                     
-                    if (options.variator)
-                        instance = await options.variator();
-                    else
-                        instance = await this.variate(bitstream, options.parent, options.field);
+                    let g = this.variate(bitstream, options.parent, options.field);
+                    while (true) {
+                        let result = g.next();
+                        if (result.done === false) {
+                            yield result.value;
+                        } else {
+                            instance = result.value;
+                            break;
+                        }
+                    }
                     
                     if (!instance)
                         throw new Error(`Variator did not return a value!`);
@@ -555,7 +571,18 @@ export class BitstreamElement {
                 }
 
                 try {
-                    let readValue = await element.options.serializer.read(bitstream, element.type, instance, element);
+                    let g = element.options.serializer.read(bitstream, element.type, instance, element);
+                    let readValue;
+                    while (true) {
+                        let result = g.next();
+                        if (result.done === false) {
+                            yield result.value;
+                        } else {
+                            readValue = result.value;
+                            break;
+                        }
+                    }
+
                     if (!element.options.isIgnored)
                         instance[element.name] = readValue;
                     instance.readFields.push(element.name);
@@ -661,8 +688,15 @@ export class BitstreamElement {
      * @returns The current instance, unless it was variated into a subclass instance, in which case it will be the 
      *                  variated subclass instance. Thus it is important to observe the result of this method.
      */
-    async read(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
-        return await this.readGroup(bitstream, '*', { variator, ...options });
+    *read(bitstream : BitstreamReader, options? : SerializeOptions) {
+        let g = this.readGroup(bitstream, '*', options);
+        while (true) {
+            let result = g.next();
+            if (result.done === false)
+                yield result.value;
+            else
+                return result.value;
+        }
     }
 
     /**
@@ -676,14 +710,29 @@ export class BitstreamElement {
      * @returns The current instance, unless it was variated into a subclass instance, in which case it will be the 
      *                  variated subclass instance. Thus it is important to observe the result of this method.
      */
-    async readOwn(bitstream : BitstreamReader, variator? : () => Promise<this>, options? : SerializeOptions) {
-        return await this.readGroup(bitstream, '$*', { variator, ...options });
+    *readOwn(bitstream : BitstreamReader, options? : SerializeOptions) {
+        let g = this.readGroup(bitstream, '$*', options);
+        while (true) {
+            let result = g.next();
+            if (result.done === false)
+                yield result.value;
+            else
+                return result.value;
+        }
     }
 
-    async variate(reader : BitstreamReader, parent? : BitstreamElement, defn? : FieldDefinition) {
-        let variantType = this.determineVariantType(parent, defn?.options.variants);
-        if (variantType)
-            return await variantType.read(reader, parent, defn, this);
+    *variate(reader : BitstreamReader, parent? : BitstreamElement, defn? : FieldDefinition): Generator<number, this> {
+        let variantType : typeof BitstreamElement = this.determineVariantType(parent, defn?.options.variants);
+        if (variantType) {
+            let g = variantType.readGenerator(reader, parent, defn, this);
+            do {
+                let result = g.next();
+                if (result.done === false)
+                    yield result.value;
+                else
+                    return <this> result.value;
+            } while (true);
+        }
 
         return this;
     }
@@ -700,65 +749,18 @@ export class BitstreamElement {
         this : T, 
         reader : BitstreamReader, 
         parent? : BitstreamElement, 
-        defn? : FieldDefinition, 
-        elementBeingVariated? : BitstreamElement
+        defn? : FieldDefinition
     ) : Promise<InstanceType<T>> {
-        if (globalThis.BITSTREAM_OPTIMIZE_PROMISES) {
-            let iterator = <Generator<number, InstanceType<T>>> this.generatedReader(reader, parent);
-            do {
-                let result = iterator.next();
-                if (result.done === false) {
-                    // we need more bits, await
-                    await reader.assure(result.value);
-                    continue;
-                }
-        
-                return result.value;
-            } while (true);
-        }
-
-        let element = new this();
-        element.parent = parent;
-
-        let parentStillReading = elementBeingVariated ? elementBeingVariated.isBeingRead : false;
-        element.isBeingRead = true;
-
-        let variator = async () => {
-            let variantType = element.determineVariantType(parent, defn?.options.variants);
-            if (variantType)
-                return await variantType.read(reader, parent, defn, element);
-
-            return element;
-        };
-
-        if (elementBeingVariated) {
-            element.syntax.forEach(f => {
-                if (defn?.options?.skip && defn.options.skip.includes(f.name))
-                    return;
-
-                if (elementBeingVariated.syntax.some(x => x.name === f.name) && elementBeingVariated.readFields.includes(f.name)) {
-                    if (!f.options.isIgnored)
-                        element[f.name] = elementBeingVariated[f.name];
-                    element.readFields.push(f.name);
-                }
-            });
-
-            element = await element.readOwn(reader, variator, { skip: defn?.options?.skip });
-        } else {
-            element = await element.read(reader, variator, { skip: defn?.options?.skip });
-        }
-
-        if (globalThis.BITSTREAM_TRACE)
-            console.log(`Done reading ${element.constructor.name}, isBeingRead=${parentStillReading}`);
-        element.isBeingRead = parentStillReading;
-
-        if (!element.ownSyntax.some(x => x.options.isVariantMarker)) {
-            if (globalThis.BITSTREAM_TRACE)
-                console.log(`** Variating ${element.constructor.name}`);
-            element = await variator();
-        }
-        
-        return <InstanceType<T>> element;
+        let iterator = <Generator<number, InstanceType<T>>> this.readGenerator(reader, parent, defn);
+        do {
+            let result = iterator.next();
+            if (result.done === false) {
+                await reader.assure(result.value);
+                continue;
+            }
+    
+            return result.value;
+        } while (true);
     }
 
     /**
@@ -801,8 +803,8 @@ export class BitstreamElement {
      * @param generator 
      * @returns 
      */
-    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): T {
-        let iterator = <Generator<number, T>> <unknown> this.generatedReader(reader, parent);
+    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): InstanceType<T> {
+        let iterator = <Generator<number, InstanceType<T>>> this.generatedReader(reader, parent);
         do {
             let result = iterator.next();
             if (result.done === false)
@@ -819,8 +821,9 @@ export class BitstreamElement {
      * @param generator The generator that implements the read operation
      * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
      */
-    static tryReadSync<T>(reader : BitstreamReader, generator : (reader : BitstreamReader) => Generator<number, T>): T {
-        let iterator = generator(reader);
+    static tryReadSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): InstanceType<T> {
+        let instance = new this();
+        let iterator = <Generator<number, InstanceType<T>>> this.generatedReader(reader, instance, parent);
         let previouslyRetaining = reader.retainBuffers;
 
         reader.retainBuffers = true;
@@ -839,7 +842,82 @@ export class BitstreamElement {
         } while (true);
     }
 
-    static generateReader() {
+    /**
+     * Try to read the bitstream using the given generator function synchronously, if there are not enough bits, abort 
+     * and return undefined.
+     * @param reader The reader to read from
+     * @param generator The generator that implements the read operation
+     * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
+     */
+    static *readGenerator<T extends typeof BitstreamElement>(
+         this : T, 
+         reader : BitstreamReader,
+         parent? : BitstreamElement,
+         defn? : FieldDefinition,
+         elementBeingVariated? : BitstreamElement
+    ): Generator<number, InstanceType<T>> {
+        let element = new this();
+        element.parent = parent;
+        let parentStillReading = elementBeingVariated ? elementBeingVariated.isBeingRead : false;
+        element.isBeingRead = true;
+
+        if (elementBeingVariated) {
+            element.syntax.forEach(f => {
+                if (defn?.options?.skip && defn.options.skip.includes(f.name))
+                    return;
+
+                if (elementBeingVariated.syntax.some(x => x.name === f.name) && elementBeingVariated.readFields.includes(f.name)) {
+                    if (!f.options.isIgnored)
+                        element[f.name] = elementBeingVariated[f.name];
+                    element.readFields.push(f.name);
+                }
+            });
+
+            let g = element.readOwn(reader, { skip: defn?.options?.skip });
+            while (true) {
+                let result = g.next();
+                if (result.done === false) {
+                    yield result.value;
+                } else {
+                    element = result.value;
+                    break;
+                }
+            }
+        } else {
+            let g = element.read(reader, { skip: defn?.options?.skip });
+            while (true) {
+                let result = g.next();
+                if (result.done === false) {
+                    yield result.value;
+                } else {
+                    element = result.value;
+                    break;
+                }
+            }
+        }
+
+        element.isBeingRead = parentStillReading;
+
+        if (!element.ownSyntax.some(x => x.options.isVariantMarker)) {
+            let g = element.variate(reader, parent, defn);
+            while (true) {
+                let result = g.next();
+                if (result.done === false) {
+                    yield result.value;
+                } else {
+                    element = result.value;
+                    break;
+                }
+            }
+        }
+        
+        return <InstanceType<T>> element;
+    }
+
+    private static generateReader() {
+        if (this._generatedReader)
+            return;
+        
         let elementClass = this;
         let statements : string[] = [];
         let F = <FieldDefinition[]>elementClass.syntax;
@@ -862,7 +940,9 @@ export class BitstreamElement {
             return reader.available < length;
         }
         
-        statements.push(`let I = new elementClass(), R = reader, P = parent, L = 0`, ``);
+        statements.push(`let I = instance, R = reader, P = parent, L = 0`, ``);
+
+
         for (let i = 0, max = F.length; i < max; ++i) {
             let field = F[i];
 
@@ -878,7 +958,7 @@ export class BitstreamElement {
             let fieldAssign = `${fieldRef} = `;
             
             if (field.options.isVariantMarker) {
-
+                // TODO
             }
 
             if (field.options.isIgnored) {
@@ -915,9 +995,9 @@ export class BitstreamElement {
             if (field.options?.presentWhen || field.options?.excludedWhen) {
                 let conditions : string[] = [];
                 if (field.options?.presentWhen)
-                    conditions.push(`F[${i}].options.presentWhen(instance)`);
+                    conditions.push(`F[${i}].options.presentWhen(I)`);
                 if (field.options?.excludedWhen)
-                    conditions.push(`!F[${i}].options.presentWhen(instance)`);
+                    conditions.push(`!F[${i}].options.presentWhen(I)`);
                 
                 statement = `if (${conditions.join(' && ')}) ${statement}`;
             }
@@ -927,11 +1007,17 @@ export class BitstreamElement {
             statements.push(`/* ${rightPad(`[${field.type.name}] ${String(field.name)}`, 40)} */ ${rightPad(`L = ${length}; if (Ex(R, L)) yield L;`, 30)} ${statement}`);
         }
 
-        statements.push(``, `return instance`);
-        let reader = eval(`(function *read(reader, parent) {\n    ${statements.map(x => x && !x.includes(' // ') ? `${x};` : x).join("\n    ")}\n})`);
+        statements.push(``, `return I`);
+        
+        // reader : BitstreamReader,
+        // parent? : BitstreamElement,
+        // defn? : FieldDefinition,
+        // elementBeingVariated? : BitstreamElement
+
+        let reader = eval(`(function *read(reader, instance, parent, defn, own) {\n    ${statements.map(x => x && !x.includes(' // ') ? `${x};` : x).join("\n    ")}\n})`);
         elementClass['__reader'] = reader;
 
-        return reader;
+        this._generatedReader = reader;
     }
 
 }

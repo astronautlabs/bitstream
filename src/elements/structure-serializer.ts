@@ -7,8 +7,15 @@ import { BitstreamReader, BitstreamWriter } from "../bitstream";
  * Serializes BitstreamElement instances to/from bitstreams
  */
 export class StructureSerializer implements Serializer {
-    async read(reader : BitstreamReader, type : any, parent : BitstreamElement, field : FieldDefinition) : Promise<any> {
-        return type.read(reader, parent, field);
+    *read(reader : BitstreamReader, type : typeof BitstreamElement, parent : BitstreamElement, field : FieldDefinition) {
+        let g = type.readGenerator(reader, parent, field);
+        while (true) {
+            let result = g.next();
+            if (result.done === false)
+                yield result.value;
+            else
+                return result.value;
+        }
     }
     
     async write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: BitstreamElement) {
