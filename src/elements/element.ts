@@ -821,7 +821,7 @@ export class BitstreamElement {
      * @param generator The generator that implements the read operation
      * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
      */
-    static tryReadSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): InstanceType<T> {
+    static tryRead<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): InstanceType<T> {
         let instance = new this();
         let iterator = <Generator<number, InstanceType<T>>> this.generatedReader(reader, instance, parent);
         let previouslyRetaining = reader.retainBuffers;
