@@ -770,10 +770,17 @@ export class BitstreamElement {
      * @param data 
      * @returns 
      */
-    static async deserialize<T>(this : Constructor<T>, data : Buffer | ArrayBuffer): Promise<T> {
+    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Buffer | ArrayBuffer): Promise<InstanceType<T>> {
         let reader = new BitstreamReader();
         reader.addBuffer(Buffer.from(data));
-        return await (<any>this).read(reader);
+        let gen = this.read(reader);
+        while (true) {
+            let result = gen.next();
+            if (result.done === false)
+                throw new Error(`Buffer exhausted when reading ${result.value} bits`);
+            else
+                return result.value;
+        }
     }
 
     /**
