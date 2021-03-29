@@ -136,13 +136,21 @@ class MyElement extends BitstreamElement {
 }
 ```
 
-Then, deserialize using:
+Then, read from a BitstreamReader using:
 
 ```typescript
-let element = await MyElement.deserialize(bitstreamReader);
+let element = await MyElement.read(bitstreamReader);
+```
+
+Or, deserialize from a Buffer using:
+
+```typescript
+let element = await MyElement.deserialize(buffer);
 ```
 
 If you specify type `boolean` for a field, the integer values `0` and `1` will be automatically converted to `false` and `true` respectively (and vice versa, when writing to a bitstream).
+
+### Strings
 
 Elements can also handle serializing fixed-length strings. To represent a fixed-length 5 byte string, set the length to `5` (note that this differs from other field types, where the length
 specified is in bits).
@@ -158,15 +166,19 @@ If you wish to control the encoding options, use the `string` options group:
     stringField : string;
 ```
 
+### Buffers
+
 You can represent a number of bytes as a Buffer:
 
 ```
     @Field(10*8) read10BytesIntoBuffer : Buffer;
 ```
 
+### Nested Elements
+
 You can also nest element classes:
 
-```
+```typescript
 class PartElement extends BitstreamElement {
     @Field(3) a : number;
     @Field(5) b : number;
@@ -178,9 +190,13 @@ class WholeElement extends BitstreamElement {
 }
 ```
 
-This is useful for organization, and is necessary when representing **arrays**:
+This is useful for organization, and is necessary when representing **arrays**.
 
-```
+### Arrays
+
+Elements support arrays natively:
+
+```typescript
 
 class ItemElement extends BitstreamElement {
     @Field(3) a : number;
@@ -203,12 +219,190 @@ bytes (24 bits) following the count in the bitstream before the next element beg
 
 Change `countFieldLength` to use a different bitfield size for the preceding count value.
 
-## Serialization (writing)
+### Optional Fields
 
-Serialize using:
+You can make fields optional by using the `presentWhen` and/or `excludedWhen` options:
 
 ```typescript
-element.serializeTo(bitstreamWriter);
+class ItemElement extends BitstreamElement {
+    @Field(3) a : number;
+    @Field(5, { presentWhen: i => i.a == 10 }) b : number;
+}
+```
+
+In the above case, the second field is only present when the first field is `10`.
+
+`excludedWhen` is the opposite of `presentWhen` and is provided for convenience and expressiveness.
+
+### Dynamic Lengths
+
+Sometimes the length of a field depends on what has been read before the field being read. Whereever `BitstreamElement` lets you specify a length you can also provide a "determinant" function which determines the length instead of a literal number:
+
+```typescript
+class ItemElement extends BitstreamElement {
+    @Field(3) length : number;
+    @Field(i => i.length) value : number;
+}
+```
+
+In the above, if `length` is read as `30`, then the `value` field is read/written as 30 bits long.
+
+### Variants
+
+Many bitstream formats have the concept of _specialization_. BitstreamElement represents this using the "Variant" system. Any BitstreamElement class may have zero or more "Variant" classes which are automatically substituted for the class which is being read.
+
+```typescript
+class BaseElement extends BitstreamElement {
+    @Field(3) type : number;
+}
+
+@Variant(i => i.type === 0x1)
+class Type1Element extends BaseElement {
+    @Field(5) field1 : number;
+}
+
+@Variant(i => i.type === 0x2)
+class Type2Element extends BaseElement {
+    @Field(5) field1 : number;
+}
+```
+
+When reading an instance of `BaseElement` the library automatically checks the _discriminants_ specified on the defined Variant classes to determine the appropriate subclass to substitute. In the case above, if `type` is read as `0x2` when performing `await BaseElement.read(reader)`, then the result will be an instance of `Type2Element`.
+
+### Variation Sandwich
+
+Sometimes a bitstream format specifies that the specialized fields fall somewhere in the middle of the overall structure, with the fields of the base class falling both before and after those found in the subclass. `BitstreamElement` can accomodate this using `@VariantMarker()`:
+
+```typescript
+class BaseElement extends BitstreamElement {
+    @Field(3) type : number;
+    @VariantMarker() $variant;
+    @Field(8) checksum : number;
+}
+
+@Variant(i => i.type === 0x1)
+class Type1Element extends BaseElement {
+    @Field(5) field1 : number;
+}
+
+@Variant(i => i.type === 0x2)
+class Type2Element extends BaseElement {
+    @Field(5) field1 : number;
+}
+```
+
+In the above example, variation will occur after reading `type` but before reading `checksum`. After variation occurs (resulting in a `Type2Element` instance), the `checksum` field will then be read.
+
+### Written Values
+
+Sometimes it is desirable to override the value present in a field with a specific formula. This is useful when representing the lengths of arrays,  Buffers, or ensuring that a certain hardcoded value is always written regardless of what is specified in the instance being written. Use the  `writtenValue` option to override the value that is specified on an instance:
+
+```typescript
+class Type2Element extends BaseElement {
+    @Field(version, { writtenValue: () => 123 })
+    version : number;
+}
+```
+
+The above element will always write `123` in the field specified by `version`.
+
+### Measurement
+
+It can be useful to measure the bitlength of a portion of a BitstreamElement. Such a measurement could be used when defining the length of a bit field or when defining the value of a bitfield. Use the `measure()` method to accomplish this.
+
+```typescript
+class Type2Element extends BaseElement {
+    @Field(8, { writtenValue: i => i.measure('version', 'checksum') })
+    length : number;
+
+    @Field(version, { writtenValue: () => 123 })
+    version : number;
+
+    @VariantMarker() $variant;
+
+    checksum : number;
+}
+```
+
+In the above, the written value of `length` will be the number of bits occupied by the fields starting from `version` through `checksum` inclusive, including all fields specified by the variant of the element which is being written.
+
+### Markers 
+
+Measurement is extremely useful, but because `measure()` only measures fields _inclusively_ it is tempting to introduce fields with zero length which can be used as _markers_ for measurement purposes. You can absolutely do this with fields marked `@Field(0)`, but there is a dedicated decorator for this: `@Marker()`, which also marks the field as "ignored", meaning it will never actually be read or written from the relevant object instance.
+
+```typescript
+class Type2Element extends BaseElement {
+    @Field(version, { writtenValue: () => 123 })
+    version : number;
+
+    @Field(8, { writtenValue: i => i.measure('$lengthStart', '$lengthEnd') })
+    length : number;
+
+    @Marker() $lengthStart;
+
+    @VariantMarker() $variant;
+
+    @Marker() $lengthEnd;
+
+    checksum : number;
+}
+```
+
+In the above example, the written value of `length` will be the bit length of the fields provided by the variant subclass, not including any other fields. The fields `$lengthStart` and `$lengthEnd` will not contribute any data to the bitstream representation.
+
+### Measurement Shortcuts
+
+There is also `measureTo()` and `measureFrom()` which measure the entire element up to and including a specific field, and from a specific field to the end of an element, respectively. You can also use `measureField()` to measure the size of a specific field.
+
+### Type-safe Field References
+
+Note that in prior examples we specified field references as strings when calling `measure()`. You can also specify field references as functions which allow for better type safety:
+
+```typescript
+class Type2Element extends BaseElement {
+    @Field(version, { writtenValue: () => 123 })
+    version : number;
+
+    @Field(8, { writtenValue: (i : Type2Element) => i.measureFrom(i => $lengthStart) })
+    length : number;
+
+    @Marker() $lengthStart;
+    @VariantMarker() $variant;
+}
+```
+
+In the case above the type of the determinant is carried through into the `measureFrom()` call, and Typescript will alert you if you reference a field that doesn't exist on `Type2Element`.
+
+### Reserved fields
+
+There is also `@Reserved(length)` which can be used in place of `@Field(length)`. This decorator marks a field as taking up space in the bitstream, but ignores the value in the object instance when reading/writing. Instead the value is always high bits. That is, a field marked with `@Reserved(8)` will always be written as `0xFF` (`0b11111111`). This can be useful for standards which specify that reserved space should be filled with high bits. Other schemes can be accomodated with custom decorators like this one:
+
+```typescript
+function LowReserved(length : LengthDeterminant) {
+    return Field(length, { ignored: true, writtenValue: () => 0 });
+}
+```
+
+The above function can be used as a decorator to specify that the values read/written should be ignored (and not read/written to the object), and that whenever writing the value it should be _low_ bits. It could be used like so:
+
+```typescript
+class MyElement extends BitstreamElement {
+    @LowReserved() reserved : number;
+}
+```
+
+## Serialization (writing)
+
+Write to a BitstreamWriter with:
+
+```typescript
+element.write(bitstreamWriter);
+```
+
+Serialize to a Buffer using:
+
+```typescript
+let buffer = element.serialize();
 ```
 
 ## Advanced Serialization
