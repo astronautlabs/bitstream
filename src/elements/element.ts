@@ -724,7 +724,7 @@ export class BitstreamElement {
     *variate(reader : BitstreamReader, parent? : BitstreamElement, defn? : FieldDefinition): Generator<number, this> {
         let variantType : typeof BitstreamElement = this.determineVariantType(parent, defn?.options.variants);
         if (variantType) {
-            let g = variantType.readGenerator(reader, parent, defn, this);
+            let g = variantType.read(reader, parent, defn, this);
             do {
                 let result = g.next();
                 if (result.done === false)
@@ -745,13 +745,13 @@ export class BitstreamElement {
      * @param parent Specify a parent instance which the new instance is found within
      * @returns 
      */
-    static async read<T extends typeof BitstreamElement>(
+    static async readBlocking<T extends typeof BitstreamElement>(
         this : T, 
         reader : BitstreamReader, 
         parent? : BitstreamElement, 
         defn? : FieldDefinition
     ) : Promise<InstanceType<T>> {
-        let iterator = <Generator<number, InstanceType<T>>> this.readGenerator(reader, parent, defn);
+        let iterator = <Generator<number, InstanceType<T>>> this.read(reader, parent, defn);
         do {
             let result = iterator.next();
             if (result.done === false) {
@@ -849,7 +849,7 @@ export class BitstreamElement {
      * @param generator The generator that implements the read operation
      * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
      */
-    static *readGenerator<T extends typeof BitstreamElement>(
+    static *read<T extends typeof BitstreamElement>(
          this : T, 
          reader : BitstreamReader,
          parent? : BitstreamElement,
