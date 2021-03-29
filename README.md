@@ -11,17 +11,15 @@ that end it includes both imperative and declarative mechanisms for doing so.
 
 # Performance
 
-Most of the functionality of this library is used by awaiting promises. This allows you to create a pseudo-blocking 
-control flow similar to what is done in lower level languages like C/C++. Using promises in this manner is very fast, 
-and in most cases will not cause a performance bottleneck, but in certain extreme cases it will. We have a 
-microbenchmark included which indicates that it can take upwards of 350,000 promises/sec before throughput is impacted.
-This can be minimized, and when using the Elements features of this library, we take some measures to ensure we minimize
-the amount of waits we use, to avoid hitting the threshold where throughput is negatively impacted, even on complex 
-bitstream scenarios.
+When reading data from BitstreamReader, you have two options: use the synchronous methods which will throw if not enough data is available, or the asynchronous methods which will wait for the data to arrive before completing the read operation. If you know you have enough data to complete the operation, you can read synchronously to avoid the overhead of creating and awaiting a Promise. If your application is less performance intensive you can instead receive a Promise for when the data becomes available (which happens by a `addBuffer()` call). This allows you to create a pseudo-blocking control flow similar to what is done in lower level languages like C/C++. Using promises in this manner is very fast, and in most cases will not cause a performance bottleneck, but in certain cases it will. You can always check if a reader has enough data available to complete an operation before you attempt to synchronously read it, allowing a lot of performance optimization potential.
 
-Regardless, for particularly taxing bitstreaming use cases such as compressed audio and video processing, the effect of 
-promises on throughput should be considered. The library does offer synchronous read operations, and in many cases 
-syntax parsing code can be restructured to reduce the effect. 
+We have a microbenchmark included which indicates that it can take upwards of 350,000 promises/sec before throughput is impacted on a reasonably powerful system (tested on an Intel Core i7 6700), but this will always come at the expense of additional CPU and memory usage which is why BitstreamReader supports both synchronous and asynchronous operations.
+
+When reading data into a declarative BitstreamElement class ECMAscript generators are used. Generators allow the library to defer continuation strategies out to the caller, so you have the option of how you'd prefer to handle buffer underruns without necessarily incurring the overhead of promises unless you want it. When there isn't enough data available, there are a number of strategies you can employ: wait for the data to become available by waiting for a Promise to complete, produce an error, or rewind the reader and return undefined so that you can try again later after more data has arrived. 
+
+When reading a BitstreamElement using the Promise based API you are only incurring the overhead of a Promise execution when there is not enough data available in the BitstreamReader that the element is being read from, which will only happen if the raw data is not arriving fast enough. In that case, though the Promise will have a small impact on CPU/memory usage, it will not impact throughput, because the IO wait time will be larger than the time necessary to accomodate the Promise overhead. We believe that this effectively eliminates the overhead of using an async/await pattern with BitstreamElements, so we encourage you start there and optimize only if you run into throughput / CPU / memory bottlenecks.
+
+With generators at the core of BitstreamElement, implementing high throughput applications such as audio and video processing are quite viable with this library. You are more likely to run into a bottleneck with Javascript or Node.js itself than to be bottlenecked by using declarative BitstreamElement classes, of course your mileage may vary! If you believe BitstreamElement is a performance bottleneck for you, please file an issue!
 
 # Installation
 
