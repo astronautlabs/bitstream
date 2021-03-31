@@ -11,12 +11,12 @@ export class BitstreamWriter {
      * @param bufferSize The number of bytes to buffer before flushing onto the writable
      */
     constructor(readonly stream : Writable, readonly bufferSize = 1) {
-        this.buffer = Buffer.alloc(bufferSize);
+        this.buffer = new Uint8Array(bufferSize);
     }
 
     private pendingByte : bigint = BigInt(0);
     private pendingBits : number = 0;
-    private buffer : Buffer;
+    private buffer : Uint8Array;
     private bufferedBytes = 0;
 
     end() {
@@ -34,8 +34,8 @@ export class BitstreamWriter {
     
     flush() {
         if (this.bufferedBytes > 0) {
-            this.stream.write(this.buffer); // TODO: callback
-            this.buffer = Buffer.alloc(this.bufferSize);
+            this.stream.write(this.buffer);
+            this.buffer = new Uint8Array(this.bufferSize);
             this.bufferedBytes = 0;
         }
     }
@@ -48,9 +48,21 @@ export class BitstreamWriter {
      * @param encoding The encoding to use when writing the string. Defaults to utf-8
      */
     writeString(byteCount : number, value : string, encoding : string = 'utf-8') {
-        let buffer = Buffer.alloc(byteCount);
-        Buffer.from(value, <any>encoding).copy(buffer);
-        this.writeBuffer(buffer);
+        if (encoding !== 'utf-8') {
+            if (typeof Buffer === 'undefined') {
+                throw new Error(`Encoding '${encoding}' is not supported: No Node.js Buffer implementation found, web standard TextEncoder only supports utf-8`);
+            }
+
+            let buffer = Buffer.alloc(byteCount);
+            Buffer.from(value, <any>encoding).copy(buffer);
+            this.writeBuffer(buffer);
+        } else {
+            let buffer = new Uint8Array(byteCount);
+            let encoder = new TextEncoder();
+            let strBuf = encoder.encode(value);
+            buffer.set(strBuf, 0);
+            this.writeBuffer(buffer);
+        }
     }
 
     /**
@@ -59,7 +71,7 @@ export class BitstreamWriter {
      * a set of bytes at a non=zero bit offset if you wish.
      * @param buffer The buffer to write
      */
-    writeBuffer(buffer : Buffer) {
+    writeBuffer(buffer : Uint8Array) {
         for (let i = 0, max = buffer.length; i < max; ++i)
             this.write(8, buffer[i]);
     }
@@ -122,7 +134,7 @@ export class BitstreamMeasurer extends BitstreamWriter {
         this.bitLength += byteCount * 8;
     }
 
-    writeBuffer(buffer : Buffer) {
+    writeBuffer(buffer : Uint8Array) {
         this.bitLength += buffer.length * 8;
     }
 
