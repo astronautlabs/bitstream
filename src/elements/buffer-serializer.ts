@@ -17,17 +17,24 @@ import { resolveLength } from "./resolve-length";
             throw new Error(`Failed to resolve length for buffer via 'length': ${e.message}`);
         }
         
-        let buffer = Buffer.alloc(length);
+        let buffer : Uint8Array;
+        
+        if (field.type === Buffer)
+            buffer = Buffer.alloc(length);
+        else
+            buffer = new Uint8Array(length);
+        
         for (let i = 0, max = buffer.length; i < max; ++i) {
             if (!reader.isAvailable(8))
                 yield 8;
             
             buffer[i] = reader.readSync(8);
         }
+
         return buffer;
     }
 
-    write(writer: BitstreamWriter, type : any, parent : BitstreamElement, field: FieldDefinition, value: Buffer) {
+    write(writer: BitstreamWriter, type : any, parent : BitstreamElement, field: FieldDefinition, value: Uint8Array) {
         let length : number;
 
         try {
@@ -46,7 +53,7 @@ import { resolveLength } from "./resolve-length";
             } else {
                 writer.writeBuffer(value);
                 if (value.length < fieldLength)
-                    writer.writeBuffer(Buffer.alloc(fieldLength - value.length, 0));
+                    writer.writeBuffer(new Uint8Array(fieldLength - value.length));
             }
         }
     }

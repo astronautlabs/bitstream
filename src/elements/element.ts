@@ -127,7 +127,7 @@ export class BitstreamElement {
     }
 
     /**
-     * Serialize all fields or a subset of fields into a Buffer. 
+     * Serialize all fields or a subset of fields into a buffer. 
      * @param fromRef The first field that should be serialized. If not specified, serialization begins at the start of
      *                  the element
      * @param toRef The last field that should be serialized. If not specified, serialization continues until the end of
@@ -148,7 +148,7 @@ export class BitstreamElement {
                     toIndex -= 1;
                 
                 if (toIndex < 0)
-                    return Buffer.alloc(0);
+                    return new Uint8Array(0);
                 
                 toRef = this.syntax[toIndex].name;
             } else if (this.isBeingRead) {
@@ -203,7 +203,7 @@ export class BitstreamElement {
 
         writer.end();
 
-        return <Buffer>stream.buffer;
+        return stream.buffer;
     }
 
     /**
@@ -769,9 +769,9 @@ export class BitstreamElement {
      * @param data 
      * @returns 
      */
-    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Buffer | ArrayBuffer): Promise<InstanceType<T>> {
+    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array): Promise<InstanceType<T>> {
         let reader = new BitstreamReader();
-        reader.addBuffer(Buffer.from(data));
+        reader.addBuffer(data);
         let gen = this.read(reader);
         while (true) {
             let result = gen.next();
@@ -936,7 +936,7 @@ export class BitstreamElement {
         }
 
         function Rb(len : number, reader : BitstreamReader) {
-            let buf : Buffer = Buffer.alloc(len);
+            let buf = new Uint8Array(len);
             for (let i = 0; i < len; ++i) 
                 buf[i] = reader.readSync(8);
             return buf;
