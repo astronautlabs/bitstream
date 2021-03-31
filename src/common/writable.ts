@@ -1,3 +1,3 @@
 export interface Writable {
-    write(chunk: Buffer): void;
+    write(chunk: Uint8Array): void;
 }

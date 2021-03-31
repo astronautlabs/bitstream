@@ -1,8 +1,11 @@
 import { Writable } from "./writable";
 
 export class BufferedWritable implements Writable {
-    buffer : Buffer = Buffer.alloc(0);
-    write(chunk : Buffer) {
-        this.buffer = Buffer.concat([this.buffer, chunk]);
+    buffer : Uint8Array = new Uint8Array(0);
+    write(chunk : Uint8Array) {
+        let buf = new Uint8Array(this.buffer.length + chunk.length);
+        buf.set(this.buffer);
+        buf.set(chunk, this.buffer.length);
+        this.buffer = buf;
     };
 }
