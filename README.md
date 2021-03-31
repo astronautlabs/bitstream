@@ -3,23 +3,51 @@
 [![npm](https://img.shields.io/npm/v/@astronautlabs/bitstream)](https://npmjs.com/package/@astronautlabs/bitstream)
 [![CircleCI](https://circleci.com/gh/astronautlabs/bitstream.svg?style=svg)](https://circleci.com/gh/astronautlabs/bitstream)
 
-Typescript utility library for reading and writing to "bitstreams", that is, tightly packed binary streams containing 
-fields of varying lengths of bits. This package lets you treat a series of bytes as a series of bits without needing to manage which bytes the desired fields fall within. Bitstreams are most useful when implementing network protocols and data formats (both encoders and decoders).
+Highly performant Typescript library for reading and writing to "bitstreams", tightly packed binary streams containing fields of varying lengths of bits. This package lets you treat a series of bytes as a series of bits without needing to manage which bytes the desired fields fall within. Bitstreams are most useful when implementing network protocols and data formats (both encoders and decoders).
 
 The goal of this library is to provide a very readable high level system for parsing and generating bitstreams. To
 that end it includes both imperative and declarative mechanisms for doing so. 
 
 # Performance
 
-When reading data from BitstreamReader, you have two options: use the synchronous methods which will throw if not enough data is available, or the asynchronous methods which will wait for the data to arrive before completing the read operation. If you know you have enough data to complete the operation, you can read synchronously to avoid the overhead of creating and awaiting a Promise. If your application is less performance intensive you can instead receive a Promise for when the data becomes available (which happens by a `addBuffer()` call). This allows you to create a pseudo-blocking control flow similar to what is done in lower level languages like C/C++. Using promises in this manner is very fast, and in most cases will not cause a performance bottleneck, but in certain cases it will. You can always check if a reader has enough data available to complete an operation before you attempt to synchronously read it, allowing a lot of performance optimization potential.
+When reading data from BitstreamReader, you have two options: use the synchronous methods which will throw if not enough data is available, or the asynchronous methods which will wait for the data to arrive before completing the read operation. If you know you have enough data to complete the operation, you can read synchronously to avoid the overhead of creating and awaiting a Promise. If your application is less performance intensive you can instead receive a Promise for when the data becomes available (which happens by a `addBuffer()` call). This allows you to create a pseudo-blocking control flow similar to what is done in lower level languages like C/C++. However using promises in this manner can cause a huge reduction in performance while reading data. You should only use the async API when performance requirements are relaxed. 
 
-We have a microbenchmark included which indicates that it can take upwards of 350,000 promises/sec before throughput is impacted on a reasonably powerful system (tested on an Intel Core i7 6700), but this will always come at the expense of additional CPU and memory usage which is why BitstreamReader supports both synchronous and asynchronous operations.
-
-When reading data into a declarative BitstreamElement class ECMAscript generators are used. Generators allow the library to defer continuation strategies out to the caller, so you have the option of how you'd prefer to handle buffer underruns without necessarily incurring the overhead of promises unless you want it. When there isn't enough data available, there are a number of strategies you can employ: wait for the data to become available by waiting for a Promise to complete, produce an error, or rewind the reader and return undefined so that you can try again later after more data has arrived. 
-
-When reading a BitstreamElement using the Promise based API you are only incurring the overhead of a Promise execution when there is not enough data available in the BitstreamReader that the element is being read from, which will only happen if the raw data is not arriving fast enough. In that case, though the Promise will have a small impact on CPU/memory usage, it will not impact throughput, because the IO wait time will be larger than the time necessary to accomodate the Promise overhead. We believe that this effectively eliminates the overhead of using an async/await pattern with BitstreamElements, so we encourage you start there and optimize only if you run into throughput / CPU / memory bottlenecks.
+When reading data into a **declarative BitstreamElement** class however, ECMAscript generators are used to control whether the library needs to wait for more data. When reading a BitstreamElement using the Promise-based API you are only incurring the overhead of the Promise API once for the initial call, and once each time there is not enough data available in the underlying BitstreamReader, which will only happen if the raw data is not arriving fast enough. In that case, though the Promise will have the typical overhead, it will not impact throughput because the IO wait time will be larger than the time necessary to handle the Promise overhead. We believe that this effectively eliminates the overhead of using an async/await pattern with reasonably sized BitstreamElements, so we encourage you start there and optimize only if you run into throughput / CPU / memory bottlenecks.
 
 With generators at the core of BitstreamElement, implementing high throughput applications such as audio and video processing are quite viable with this library. You are more likely to run into a bottleneck with Javascript or Node.js itself than to be bottlenecked by using declarative BitstreamElement classes, of course your mileage may vary! If you believe BitstreamElement is a performance bottleneck for you, please file an issue!
+
+## So is it faster to "hand roll" using BitstreamReader instead of using BitstreamElements?
+
+Absolutely not. You should use BitstreamElement whereever possible, because it is using generators as the core mechanism for handling bitstream exhaustion events. Using generators internally instead of promises is _dramatically_ faster. To see this, compare the performance of @astronautlabs/bitstream@1 with @astronautlabs/bitstream@2. Using generators in the core was introduced in v2.0.0, prior to that a Promise was issued for every individual read call.
+
+How many times can each version of the library read the following BitstreamElement structure within a specified period of time?
+
+```typescript
+class SampleItem extends BitstreamElement {
+    @Field(1) b1 : number;
+    @Field(1) b2 : number;
+    @Field(1) b3 : number;
+    @Field(1) b4 : number;
+    @Field(1) b5 : number;
+    @Field(1) b6 : number;
+    @Field(1) b7 : number;
+    @Field(1) b8 : number;
+}
+
+class SampleContainer extends BitstreamElement {
+    @Field(0, { array: { type: SampleItem, countFieldLength: 32 }})
+    items : SampleItem[];
+}
+```
+
+The results are night and day:
+> **Iteration count while parsing a 103-byte buffer in 500ms** (_Intel Core i7 6700_)
+> - @astronautlabs/bitstream@1.1.0: Read the buffer 104 times
+> - @astronautlabs/bitstream@2.0.2: Read the buffer 1,163,576 times
+
+While we're proud of the performance improvement, it really just shows the overhead of Promises and how that architecture was the wrong choice for BitstreamElements in V1. 
+
+Similarly, we tried giving a 1GB buffer to each version with the above test -- V2 was able to parse the entire buffer in less than a millisecond, whereas V1 effectively _did not complete_ -- it takes _minutes_ to parse such a Buffer with V1 even once, and quite frankly we gave up waiting for it to complete.
 
 # Installation
 
