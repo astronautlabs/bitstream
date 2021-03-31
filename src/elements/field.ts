@@ -35,7 +35,8 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
             options 
         }
 
-        if ((field.type === Buffer || field.type === Uint8Array) && typeof field.length === 'number' && field.length % 8 !== 0)
+        let BufferT = typeof Buffer !== 'undefined' ? Buffer : undefined;
+        if ((field.type === BufferT || field.type === Uint8Array) && typeof field.length === 'number' && field.length % 8 !== 0)
             throw new Error(`${containingType.name}#${String(field.name)}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
 
         if (field.type === Array) {
@@ -67,7 +68,7 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
                 options.serializer = new NumberSerializer();
             else if (field.type === Boolean)
                 options.serializer = new BooleanSerializer();
-            else if (field.type === Buffer)
+            else if (typeof Buffer !== 'undefined' && field.type === Buffer)
                 options.serializer = new BufferSerializer();
             else if (field.type === Uint8Array)
                 options.serializer = new BufferSerializer();

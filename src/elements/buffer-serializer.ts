@@ -19,7 +19,7 @@ import { resolveLength } from "./resolve-length";
         
         let buffer : Uint8Array;
         
-        if (field.type === Buffer)
+        if (typeof Buffer !== 'undefined' && field.type === Buffer)
             buffer = Buffer.alloc(length);
         else
             buffer = new Uint8Array(length);
