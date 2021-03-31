@@ -8,6 +8,10 @@ Highly performant Typescript library for reading and writing to "bitstreams", ti
 The goal of this library is to provide a very readable high level system for parsing and generating bitstreams. To
 that end it includes both imperative and declarative mechanisms for doing so. 
 
+# Installation
+
+`npm install @astronautlabs/bitstream`
+
 # Performance
 
 When reading data from BitstreamReader, you have two options: use the synchronous methods which will throw if not enough data is available, or the asynchronous methods which will wait for the data to arrive before completing the read operation. If you know you have enough data to complete the operation, you can read synchronously to avoid the overhead of creating and awaiting a Promise. If your application is less performance intensive you can instead receive a Promise for when the data becomes available (which happens by a `addBuffer()` call). This allows you to create a pseudo-blocking control flow similar to what is done in lower level languages like C/C++. However using promises in this manner can cause a huge reduction in performance while reading data. You should only use the async API when performance requirements are relaxed. 
@@ -48,10 +52,6 @@ The results are night and day:
 While we're proud of the performance improvement, it really just shows the overhead of Promises and how that architecture was the wrong choice for BitstreamElements in V1. 
 
 Similarly, we tried giving a 1GB buffer to each version with the above test -- V2 was able to parse the entire buffer in less than a millisecond, whereas V1 effectively _did not complete_ -- it takes _minutes_ to parse such a Buffer with V1 even once, and quite frankly we gave up waiting for it to complete.
-
-# Installation
-
-`npm install @astronautlabs/bitstream`
 
 # Reading bitstreams
 
