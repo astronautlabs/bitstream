@@ -1,6 +1,5 @@
-import { WritableStreamBuffer } from "stream-buffers";
 import { BitstreamMeasurer, BitstreamReader, BitstreamWriter } from "../bitstream";
-import { Constructor } from "../common";
+import { BufferedWritable, Constructor } from "../common";
 import { StructureSerializer } from "./structure-serializer";
 import { ArraySerializer } from "./array-serializer";
 import { BooleanSerializer } from "./boolean-serializer";
@@ -165,7 +164,7 @@ export class BitstreamElement {
         let fromIndex = this.syntax.findIndex(x => x === from);
         let toIndex = this.syntax.findIndex(x => x === to);
 
-        let stream = new WritableStreamBuffer();
+        let stream = new BufferedWritable();
         let writer = new BitstreamWriter(stream);
 
         if (fromIndex > toIndex) {
@@ -204,7 +203,7 @@ export class BitstreamElement {
 
         writer.end();
 
-        return <Buffer>stream.getContents();
+        return <Buffer>stream.buffer;
     }
 
     /**

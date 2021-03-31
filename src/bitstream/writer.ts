@@ -1,4 +1,4 @@
-import { Writable } from "stream";
+import { Writable } from "../common";
 
 /**
  * A class for writing numbers of varying bitlengths to a Node.js Writable. 
