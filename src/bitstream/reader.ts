@@ -14,7 +14,7 @@ export interface BitstreamRequest {
  * order
  */
 export class BitstreamReader {
-    private buffers : Buffer[] = [];
+    private buffers : Uint8Array[] = [];
     private bufferedLength : number = 0;
     private blockedRequest : BitstreamRequest = null;
     private _offsetIntoBuffer = 0;
@@ -113,6 +113,8 @@ export class BitstreamReader {
             throw new Error(`Only one read() can be outstanding at a time.`);
     }
 
+    private textDecoder = new TextDecoder();
+
     /**
      * Asynchronously read the given number of bytes, encode it into a string, and return the result,
      * optionally using a specific text encoding.
@@ -122,25 +124,8 @@ export class BitstreamReader {
      */
     async readString(length : number, options? : StringEncodingOptions): Promise<string> {
         this.ensureNoReadPending();
-
-        if (!options)
-            options = {};
-        
-        let buffer = Buffer.alloc(length);
-        let firstNullByte = -1;
-        for (let i = 0, max = length; i < max; ++i) {
-            buffer[i] = await this.read(8);
-            if (buffer[i] === 0 && firstNullByte < 0)
-                firstNullByte = i;
-        }
-
-        if (options.nullTerminated !== false) {
-            if (firstNullByte >= 0) {
-                buffer = buffer.subarray(0, firstNullByte);
-            }
-        }
-
-        return buffer.toString(<any>options.encoding || 'utf-8');
+        await this.assure(8*length);
+        return this.readStringSync(length, options);
     }
 
     /**
@@ -156,7 +141,7 @@ export class BitstreamReader {
         
         this.ensureNoReadPending();
 
-        let buffer = Buffer.alloc(length);
+        let buffer = new Uint8Array(length);
         let firstNullByte = -1;
         for (let i = 0, max = length; i < max; ++i) {
             buffer[i] = this.readSync(8);
@@ -170,7 +155,13 @@ export class BitstreamReader {
             }
         }
 
-        return buffer.toString(<any>options.encoding || 'utf-8');
+        if (options.encoding === 'utf-8') {
+            return this.textDecoder.decode(buffer);
+        } else {
+            if (typeof Buffer === 'undefined')
+                throw new Error(`Encoding '${options.encoding}' is not supported: No Node.js Buffer implementation and TextDecoder only supports utf-8`);
+            return Buffer.from(buffer).toString(<any>options.encoding || 'utf-8');
+        }
     }
 
     /**
@@ -328,7 +319,7 @@ export class BitstreamReader {
      * @param buffer The buffer to add to the bitstream
      * @deprecated Use addBuffer() instead
      */
-    unread(buffer : Buffer) {
+    unread(buffer : Uint8Array) {
         this.buffers.unshift(buffer);
     }
     
@@ -336,7 +327,7 @@ export class BitstreamReader {
      * Add a buffer onto the end of the bitstream.
      * @param buffer The buffer to add to the bitstream
      */
-    addBuffer(buffer : Buffer) {
+    addBuffer(buffer : Uint8Array) {
         this.buffers.push(buffer);
         this.bufferedLength += buffer.length * 8;
 

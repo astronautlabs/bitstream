@@ -40,6 +40,8 @@ export class BitstreamWriter {
         }
     }
 
+    private textEncoder = new TextEncoder();
+
     /**
      * Decode a string into a set of bytes and write it to the bitstream, bounding the string
      * by the given number of bytes, optionally using the given encoding (or UTF-8 if not specified).
@@ -48,19 +50,18 @@ export class BitstreamWriter {
      * @param encoding The encoding to use when writing the string. Defaults to utf-8
      */
     writeString(byteCount : number, value : string, encoding : string = 'utf-8') {
-        if (encoding !== 'utf-8') {
+        if (encoding === 'utf-8') {    
+            let buffer = new Uint8Array(byteCount);
+            let strBuf = this.textEncoder.encode(value);
+            buffer.set(strBuf, 0);
+            this.writeBuffer(buffer);
+        } else {
             if (typeof Buffer === 'undefined') {
                 throw new Error(`Encoding '${encoding}' is not supported: No Node.js Buffer implementation found, web standard TextEncoder only supports utf-8`);
             }
 
             let buffer = Buffer.alloc(byteCount);
             Buffer.from(value, <any>encoding).copy(buffer);
-            this.writeBuffer(buffer);
-        } else {
-            let buffer = new Uint8Array(byteCount);
-            let encoder = new TextEncoder();
-            let strBuf = encoder.encode(value);
-            buffer.set(strBuf, 0);
             this.writeBuffer(buffer);
         }
     }
