@@ -84,7 +84,8 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
 
 /**
  * Used to mark a specific field as reserved. The value in this field will be read, but will not be 
- * copied into the BitsreamElement, and when writing the value will always be all high bits.
+ * copied into the BitsreamElement, and when writing the value will always be all high bits. For a 
+ * version using low bits, see `@ReservedLow`.
  * @param length The bitlength determinant
  * @param options Options related to this reserved field
  */
@@ -108,6 +109,32 @@ export function Reserved(length : LengthDeterminant, options? : FieldOptions) {
     }
 }
 
+/**
+ * Used to mark a specific field as reserved. The value in this field will be read, but will not be 
+ * copied into the BitsreamElement, and when writing the value will always be all low bits. For a 
+ * version using high bits, see `@Reserved`
+ * @param length The bitlength determinant
+ * @param options Options related to this reserved field
+ */
+ export function ReservedLow(length : LengthDeterminant, options? : FieldOptions) {
+    if (!options)
+        options = {};
+
+    options.isIgnored = true;
+    options.writtenValue = (instance, field : FieldDefinition) => {
+        if (field.type === Number) {
+            let currentLength = resolveLength(field.length, instance, field);
+            return Math.pow(2, currentLength) - 1;
+        }
+    };
+
+    let decorator = Field(length, options);
+    return (target : any, fieldName : string | symbol) => {
+        fieldName = Symbol(`[reserved: ${typeof length === 'number' ? `${length} bits` : `dynamic`}]`);
+        Reflect.defineMetadata('design:type', Number, target, fieldName);
+        return decorator(target, fieldName);
+    }
+}
 /**
  * Used to mark a location within a BitstreamElement which can be useful when used with measure().
  * Markers are always ignored (meaning they are not actually read/written to the BitstreamElement instance), and
