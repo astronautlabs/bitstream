@@ -122,10 +122,8 @@ export function Reserved(length : LengthDeterminant, options? : FieldOptions) {
 
     options.isIgnored = true;
     options.writtenValue = (instance, field : FieldDefinition) => {
-        if (field.type === Number) {
-            let currentLength = resolveLength(field.length, instance, field);
-            return Math.pow(2, currentLength) - 1;
-        }
+        if (field.type === Number)
+            return 0;
     };
 
     let decorator = Field(length, options);
