@@ -748,9 +748,10 @@ export class BitstreamElement {
         this : T, 
         reader : BitstreamReader, 
         parent? : BitstreamElement, 
-        defn? : FieldDefinition
+        defn? : FieldDefinition,
+        params : any[] = []
     ) : Promise<InstanceType<T>> {
-        let iterator = <Generator<number, InstanceType<T>>> this.read(reader, parent, defn);
+        let iterator = <Generator<number, InstanceType<T>>> this.read(reader, parent, defn, undefined, params);
         do {
             let result = iterator.next();
             if (result.done === false) {
@@ -769,10 +770,10 @@ export class BitstreamElement {
      * @param data 
      * @returns 
      */
-    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array): Promise<InstanceType<T>> {
+    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array, params : any[] = []): Promise<InstanceType<T>> {
         let reader = new BitstreamReader();
         reader.addBuffer(data);
-        let gen = this.read(reader);
+        let gen = this.read(reader, undefined, undefined, undefined, params);
         while (true) {
             let result = gen.next();
             if (result.done === false)
@@ -865,9 +866,10 @@ export class BitstreamElement {
          reader : BitstreamReader,
          parent? : BitstreamElement,
          defn? : FieldDefinition,
-         elementBeingVariated? : BitstreamElement
+         elementBeingVariated? : BitstreamElement,
+         params : any[] = []
     ): Generator<number, InstanceType<T>> {
-        let element = new this();
+        let element = new (this as any)(...params);
         element.parent = parent;
         let parentStillReading = elementBeingVariated ? elementBeingVariated.isBeingRead : false;
         element.isBeingRead = true;
