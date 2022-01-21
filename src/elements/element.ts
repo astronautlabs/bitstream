@@ -852,8 +852,13 @@ export class BitstreamElement {
      * Try to read the bitstream using the given generator function synchronously, if there are not enough bits, abort 
      * and return undefined.
      * @param reader The reader to read from
-     * @param generator The generator that implements the read operation
-     * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
+     * @returns A generator which when called will result in exactly one result. The result will either be a number
+     *      (in which case 'done' is false) indicating that more bits were required to complete the read operation but 
+     *      they were unavailable on the given stream. Otherwise it will be an instance of the expected element type (in which
+     *      case 'done' is true). The stream will be left in the state where the partial data was read. If you want to 
+     *      undo the read of the partial data, you will need to use retainBuffers = true, take note of the reader's offset
+     *      before the operation, and set the offset of the reader back to that value after the failed read. Note that 
+     *      retainBuffers requires you to manage the saved buffers manually (see BitstreamReader.clean()).
      */
     static *read<T extends typeof BitstreamElement>(
          this : T, 
