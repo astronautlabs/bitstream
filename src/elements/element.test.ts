@@ -336,7 +336,7 @@ describe('BitstreamElement', it => {
 
         class CustomElement extends BitstreamElement {
             @Field(0, { array: { type: CustomItem, hasMore: a => a.length === 0 || a[a.length - 1].byte !== 0 } })
-            items : number[];
+            items : CustomItem[];
         }
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 12, 34, 56, 78, 0 ]));
@@ -344,11 +344,11 @@ describe('BitstreamElement', it => {
         let element = await CustomElement.readBlocking(bitstream);
 
         expect(element.items.length).to.equal(5);
-        expect(element.items[0]).to.equal(12);
-        expect(element.items[1]).to.equal(34);
-        expect(element.items[2]).to.equal(56);
-        expect(element.items[3]).to.equal(78);
-        expect(element.items[4]).to.equal(0);
+        expect(element.items[0].byte).to.equal(12);
+        expect(element.items[1].byte).to.equal(34);
+        expect(element.items[2].byte).to.equal(56);
+        expect(element.items[3].byte).to.equal(78);
+        expect(element.items[4].byte).to.equal(0);
     });
     it('should understand arrays of floats', async () => {
         class CustomElement extends BitstreamElement {
