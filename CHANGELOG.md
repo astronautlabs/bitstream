@@ -18,7 +18,8 @@ Breaking changes:
   `options.array.count` is not specified. This matches the design intention, but since the default count was zero, this 
   is technically a breaking change since, for example, `@Field(3, { array: { elementSize: 8 }}) items : number[]` 
   previously would read zero numbers and now it will read three.
-  
+- hasMore() now accepts the `array` being built so that analyzing the values read prior can influence the result. The 
+  `instance` and `parent` parameters are still present and follow the `array`.
 # v2.1.1
 - Fix: `@ReservedLow` should actually emit low bits 
 

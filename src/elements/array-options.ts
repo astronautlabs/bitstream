@@ -1,6 +1,8 @@
 import { Discriminant } from "../common";
 import { LengthDeterminant } from "./length-determinant";
 
+export type HasMore<ArrayT = any, InstanceT = any, ParentT = any> = (array : ArrayT, element : InstanceT, parent? : ParentT) => boolean;
+
 export interface ArrayOptions {
     /**
      * The length (in bits) of the count field which 
@@ -33,7 +35,7 @@ export interface ArrayOptions {
      * 
      * Only one of `count`, `countFieldLength`, `hasMore` can be specified simultaneously.
      */
-    hasMore? : Discriminant;
+    hasMore? : HasMore;
 
     /**
      * The Javascript type of the elements of this array.

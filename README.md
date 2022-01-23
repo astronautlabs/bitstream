@@ -344,7 +344,7 @@ class ItemElement extends BitstreamElement {
 }
 
 class ListElement extends BitstreamElement {
-    @Field(0, { array: { type: ItemElement, hasMore: i => i.array[i.array.length - 1].hasMore }})
+    @Field(0, { array: { type: ItemElement, hasMore: a => a[a.length - 1].hasMore }})
     array : ItemElement[];
 }
 ```

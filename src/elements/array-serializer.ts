@@ -51,7 +51,7 @@ export class ArraySerializer implements Serializer {
                         
                         try {
                             parent.runWithFieldBeingComputed(field, () => 
-                                continued = field.options.array.hasMore(parent, parent.parent), true);
+                                continued = field.options.array.hasMore(elements, parent, parent.parent), true);
                         } catch (e) {
                             throw new Error(`${parent?.constructor.name || '<none>'}#${String(field?.name || '<none>')} Failed to determine if array has more items via 'hasMore' discriminant: ${e.message}`);
                         }
@@ -81,7 +81,7 @@ export class ArraySerializer implements Serializer {
                     
                     try {
                         parent.runWithFieldBeingComputed(field, () => 
-                            continued = field.options.array.hasMore(parent, parent.parent), true);
+                            continued = field.options.array.hasMore(elements, parent, parent.parent), true);
                     } catch (e) {
                         throw new Error(`${parent?.constructor.name || '<none>'}#${String(field?.name || '<none>')} Failed to determine if array has more items via 'hasMore' discriminant: ${e.message}`);
                     }

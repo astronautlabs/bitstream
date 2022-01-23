@@ -264,6 +264,128 @@ describe('BitstreamElement', it => {
         expect(element.items[1]).to.equal(0b1001100101);
         expect(element.items[2]).to.equal(0b1011001110);
     });
+    it('should understand arrays of signed numbers', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(3, { array: { type: Number, elementLength: 8 }, number: { format: 'signed' } }) 
+            items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 0xFB, 5, 0 ]));
+
+        let element = await CustomElement.readBlocking(bitstream);
+
+        expect(element.items.length).to.equal(3);
+        expect(element.items[0]).to.equal(-5);
+        expect(element.items[1]).to.equal(5);
+        expect(element.items[2]).to.equal(0);
+    });
+    it('hasMore should be able to observe the array being built', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(0, { array: { type: Number, elementLength: 8, hasMore: a => a[a.length - 1] !== 0 }, number: { format: 'signed' } }) 
+            items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 12, 34, 56, 78, 0 ]));
+
+        let element = await CustomElement.readBlocking(bitstream);
+
+        expect(element.items.length).to.equal(5);
+        expect(element.items[0]).to.equal(12);
+        expect(element.items[1]).to.equal(34);
+        expect(element.items[2]).to.equal(56);
+        expect(element.items[3]).to.equal(78);
+        expect(element.items[4]).to.equal(0);
+    });
+    it('when hasMore throws serialization should fail', async () => {
+        let throwable = new Error('uh oh');
+        class CustomElement extends BitstreamElement {
+            @Field(0, { array: { type: Number, elementLength: 8, hasMore: a => { throw throwable } }, number: { format: 'signed' } }) 
+            items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 12, 34, 56, 78, 0 ]));
+
+        try {
+            await CustomElement.readBlocking(bitstream);
+            throw new Error(`Expected throw`);
+        } catch (e) { 
+            expect(e.message).to.contain('uh oh');
+        }
+    });
+    it('should understand arrays of unsigned integers using hasMore', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(0, { array: { type: Number, elementLength: 8, hasMore: a => a[a.length - 1] !== 0 } }) 
+            items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 12, 34, 56, 78, 0 ]));
+
+        let element = await CustomElement.readBlocking(bitstream);
+
+        expect(element.items.length).to.equal(5);
+        expect(element.items[0]).to.equal(12);
+        expect(element.items[1]).to.equal(34);
+        expect(element.items[2]).to.equal(56);
+        expect(element.items[3]).to.equal(78);
+        expect(element.items[4]).to.equal(0);
+    });
+    it('should understand arrays of elements using hasMore', async () => {
+        class CustomItem extends BitstreamElement {
+            @Field(8) byte;
+        }
+
+        class CustomElement extends BitstreamElement {
+            @Field(0, { array: { type: CustomItem, hasMore: a => a.length === 0 || a[a.length - 1].byte !== 0 } })
+            items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 12, 34, 56, 78, 0 ]));
+
+        let element = await CustomElement.readBlocking(bitstream);
+
+        expect(element.items.length).to.equal(5);
+        expect(element.items[0]).to.equal(12);
+        expect(element.items[1]).to.equal(34);
+        expect(element.items[2]).to.equal(56);
+        expect(element.items[3]).to.equal(78);
+        expect(element.items[4]).to.equal(0);
+    });
+    it('should understand arrays of floats', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(3, { array: { type: Number, elementLength: 32 }, number: { format: 'float' } }) 
+            items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 
+            0x42, 0xCD, 0x00, 0x00,
+            0xC3, 0xDA, 0x00, 0x00,
+            0,0,0,0
+        ]));
+
+        let element = await CustomElement.readBlocking(bitstream);
+
+        expect(element.items.length).to.equal(3);
+        expect(element.items[0]).to.equal(102.5);
+        expect(element.items[1]).to.equal(-436);
+        expect(element.items[2]).to.equal(0);
+    });
+    it('should throw for arrays of unknown number type', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(3, { array: { type: Number, elementLength: 32 }, number: { format: <any>'not-real' } }) 
+            items : number[];
+        }
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 
+            0x42, 0xCD, 0x00, 0x00,
+            0xC3, 0xDA, 0x00, 0x00,
+            0,0,0,0
+        ]));
+
+        try {
+            await CustomElement.readBlocking(bitstream);
+            throw new Error(`Expected throw`);
+        } catch (e) { }
+    });
     it('should understand a static count determinant', async () => {
         class CustomElement extends BitstreamElement {
             @Field(8) before;
