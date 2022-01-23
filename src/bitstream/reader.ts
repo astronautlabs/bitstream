@@ -80,8 +80,6 @@ export class BitstreamReader {
             offsetIntoBuffer -= size;
             ++bufferIndex;
         }
-
-        throw new Error(`Should not be reached`);
     }
 
     /**

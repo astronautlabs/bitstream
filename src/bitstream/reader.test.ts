@@ -99,6 +99,23 @@ describe('BitstreamReader', it => {
         expect(bitstream.readSync(8)).to.equal(2);
         expect(bitstream.readSync(8)).to.equal(3);
     });
+    it('setting offset into discarded buffers should throw when retainBuffers=false', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 1, 2, 3 ]));
+        bitstream.addBuffer(Buffer.from([ 4, 5, 6 ]));
+
+        expect(bitstream.readSync(8)).to.equal(1);
+        expect(bitstream.readSync(8)).to.equal(2);
+        expect(bitstream.readSync(8)).to.equal(3);
+        expect(bitstream.readSync(8)).to.equal(4);
+        expect(bitstream.readSync(8)).to.equal(5);
+        expect(bitstream.readSync(8)).to.equal(6);
+
+        try {
+            bitstream.offset = 0;
+            throw new Error(`Expected throw`);
+        } catch (e) { } 
+    });
     it('offset is always increasing even when retainBuffers=false', () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 123 ]));
@@ -321,5 +338,74 @@ describe('BitstreamReader', it => {
         
         bitstream.addBuffer(Buffer.from([ 0x7f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])); 
         expect(bitstream.readFloatSync(64)).not.to.be.finite;
+    });
+    it('read() allows only one async read at a time', async () => {
+        let bitstream = new BitstreamReader();
+        bitstream.read(8);
+        try {
+            await bitstream.read(8);
+            throw new Error(`Expected read() to throw`);
+        } catch (e) {}
+    });
+    it('assure() allows only one async call at a time', async () => {
+        let bitstream = new BitstreamReader();
+        bitstream.assure(8);
+        try {
+            await bitstream.assure(8);
+            throw new Error(`Expected assure() to throw`);
+        } catch (e) {}
+    });
+    it('readStringSync() reads a string correctly', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(10);
+        buf.write('hello', 'utf-8');
+
+        bitstream.addBuffer(buf);
+        expect(bitstream.readStringSync(10)).to.equal('hello');
+    });
+    it('readStringSync() reads a non-null-terminated string correctly', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(10);
+        buf.write('hello', 'utf-8');
+
+        bitstream.addBuffer(buf);
+        expect(bitstream.readStringSync(10, { nullTerminated: false })).to.equal("hello\0\0\0\0\0");
+    });
+    it('readStringSync() reads an ASCII string correctly', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(10);
+        buf.write('hello', 'ascii');
+        bitstream.addBuffer(buf);
+        expect(bitstream.readStringSync(10)).to.equal("hello");
+    });
+    it.skip('readStringSync() reads utf16le correctly', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(32);
+        buf.write('hello', 'utf16le');
+        bitstream.addBuffer(buf);
+        expect(bitstream.readStringSync(10, { encoding: 'utf16le' })).to.equal("hello");
+    });
+    it.skip('readStringSync() reads ucs-2 correctly', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(32);
+        buf.write('hello', 'ucs-2');
+        bitstream.addBuffer(buf);
+        expect(bitstream.readStringSync(10, { encoding: 'ucs-2' })).to.equal("hello");
+    });
+    it('readString() reads a string correctly when the data is already available', async () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(10);
+        buf.write('hello', 'utf-8');
+
+        bitstream.addBuffer(buf);
+        expect(await bitstream.readString(10)).to.equal('hello');
+    });
+    it('readString() reads a string correctly when the data is not yet available', async () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(10);
+        buf.write('hello', 'utf-8');
+
+        setTimeout(() => bitstream.addBuffer(buf), 10);
+        expect(await bitstream.readString(10)).to.equal('hello');
     });
 });
