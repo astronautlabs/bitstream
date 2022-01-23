@@ -137,6 +137,38 @@ describe('BitstreamWriter', it => {
             throw new Error(`Expected write(8, NaN) to throw an exception`);
         } catch (e) { }
     });
+    it('throws when writing values outside of range', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 2);
+
+        writer.writeSigned(8, 0);
+        writer.writeSigned(8, 127);
+        writer.writeSigned(8, -128);
+
+        try {
+            writer.writeSigned(8, 200);
+            throw new Error(`Expected writeSigned(8, 200) to throw an exception`);
+        } catch (e) { }
+        try {
+            writer.writeSigned(8, 128);
+            throw new Error(`Expected writeSigned(8, 128) to throw an exception`);
+        } catch (e) { }
+        try {
+            writer.writeSigned(8, -129);
+            throw new Error(`Expected writeSigned(8, -129) to throw an exception`);
+        } catch (e) { }
+
+        
+        try {
+            writer.writeSigned(16, 999999);
+            throw new Error(`Expected writeSigned(8, 200) to throw an exception`);
+        } catch (e) { }
+        try {
+            writer.writeSigned(16, -999999);
+            throw new Error(`Expected writeSigned(8, 128) to throw an exception`);
+        } catch (e) { }
+    });
     it('throws when writing Infinity as a signed integer', () => {
         let bufs : Buffer[] = [];
         let fakeStream : any = { write(buf) { bufs.push(buf); } }
@@ -225,6 +257,17 @@ describe('BitstreamWriter', it => {
         expect(Array.from(bufs[2])).to.eql([0, 0, 0, 0, 0, 0, 0, 0]);
     });
 
+    it('writeFloat() throws for lengths other than 32 and 64', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 4);
+
+        try {
+            writer.writeFloat(13, 123);
+            throw new Error(`Expected error`);
+        } catch (e) { }
+    });
+
     it('correctly handles NaN', () => {
         let bufs : Buffer[] = [];
         let fakeStream : any = { write(buf) { bufs.push(buf); } }
@@ -251,5 +294,108 @@ describe('BitstreamWriter', it => {
 
         writer.writeFloat(64, Infinity); 
         expect(Array.from(bufs[0])).to.eql([ 0x7f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]);
+    });
+    it('end() flushes full bytes', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 4);
+
+        writer.write(8, 44);
+        expect(bufs.length).to.equal(0);
+        writer.end();
+        expect(bufs.length).to.equal(1);
+        expect(bufs[0].length).to.equal(4);
+        expect(bufs[0][0]).to.equal(44);
+        expect(bufs[0][1]).to.equal(0);
+        expect(bufs[0][2]).to.equal(0);
+        expect(bufs[0][3]).to.equal(0);
+    });
+    it('end() flushes partial bytes', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 4);
+
+        writer.write(4, 0b1111);
+        expect(bufs.length).to.equal(0);
+        writer.end();
+        expect(bufs.length).to.equal(1);
+        expect(bufs[0].length).to.equal(4);
+        expect(bufs[0][0]).to.equal(0b11110000);
+        expect(bufs[0][1]).to.equal(0);
+        expect(bufs[0][2]).to.equal(0);
+        expect(bufs[0][3]).to.equal(0);
+    });
+    it('writeString() writes utf-8 strings correctly', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 5);
+
+        writer.writeString(5, 'hello', 'utf-8');
+        expect(bufs.length).to.equal(1);
+
+        let buf = Buffer.from(bufs[0]);
+
+        expect(buf.length).to.equal(5);
+        expect(buf.toString('utf-8')).to.equal('hello');
+    });
+    it('writeString() writes utf16le strings correctly', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 10);
+
+        writer.writeString(10, 'hello', 'utf16le');
+
+        let buf = Buffer.from(bufs[0]);
+
+        expect(buf.toString('utf16le')).to.equal('hello');
+    });
+    it('writeString() throws when any encoding other than utf-8 is used and Buffer is not available', () => {
+        const BufferT = Buffer;
+        (globalThis as any).Buffer = undefined;
+
+        try {
+            let bufs : Buffer[] = [];
+            let fakeStream : any = { write(buf) { bufs.push(buf); } }
+            let writer = new BitstreamWriter(fakeStream, 10);
+
+            try {
+                writer.writeString(10, 'hello', 'utf16le');
+                throw new Error(`Expected throw`);
+            } catch (e) { }
+        } finally {
+            (globalThis as any).Buffer = BufferT;
+        }
+    });
+    it('writeBuffer() works correctly', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 2);
+
+        let buf = Buffer.from([ 12, 34, 56, 78 ]);
+        writer.writeBuffer(buf);
+
+        expect(bufs.length).to.equal(2);
+        expect(bufs[0][0]).to.equal(12);
+        expect(bufs[0][1]).to.equal(34);
+        expect(bufs[1][0]).to.equal(56);
+        expect(bufs[1][1]).to.equal(78);
+    });
+    it('writeBuffer() works even when not byte-aligned', () => {
+        let bufs : Buffer[] = [];
+        let fakeStream : any = { write(buf) { bufs.push(buf); } }
+        let writer = new BitstreamWriter(fakeStream, 5);
+
+        let buf = Buffer.from([ 12, 34, 56, 78 ]);
+        writer.write(4, 0);
+        writer.writeBuffer(buf);
+        writer.write(4, 0);
+
+        expect(bufs.length).to.equal(1);
+        expect(bufs[0].length).to.equal(5);
+        expect(bufs[0][0]).to.equal(0);
+        expect(bufs[0][1]).to.equal(194);
+        expect(bufs[0][2]).to.equal(35);
+        expect(bufs[0][3]).to.equal(132);
+        expect(bufs[0][4]).to.equal(224);
     });
 });

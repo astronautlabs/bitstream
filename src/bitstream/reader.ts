@@ -150,25 +150,41 @@ export class BitstreamReader {
         this.ensureNoReadPending();
 
         let buffer = new Uint8Array(length);
-        let firstNullByte = -1;
-        for (let i = 0, max = length; i < max; ++i) {
-            buffer[i] = this.readSync(8);
-            if (buffer[i] === 0 && firstNullByte < 0)
-                firstNullByte = i;
+        let firstTerminator = -1;
+        let charLength = 1;
+        let encoding = options.encoding ?? 'utf-8';
+
+        if (['utf16le', 'ucs-2', 'ucs2'].includes(encoding)) {
+            charLength = 2;
         }
 
-        if (options.nullTerminated !== false) {
-            if (firstNullByte >= 0) {
-                buffer = buffer.subarray(0, firstNullByte);
+        for (let i = 0, max = length; i < max; ++i) {
+            buffer[i] = this.readSync(8);
+        }
+
+        for (let i = 0, max = length; i < max; i += charLength) {
+            let char = buffer[i];
+            if (charLength === 2)
+                char = (char << 8) | (buffer[i+1] ?? 0);
+
+            if (char === 0) {
+                firstTerminator = i;
+                break;
             }
         }
 
-        if (options.encoding === 'utf-8') {
+        if (options.nullTerminated !== false) {
+            if (firstTerminator >= 0) {
+                buffer = buffer.subarray(0, firstTerminator);
+            }
+        }
+
+        if (encoding === 'utf-8') {
             return this.textDecoder.decode(buffer);
         } else {
             if (typeof Buffer === 'undefined')
-                throw new Error(`Encoding '${options.encoding}' is not supported: No Node.js Buffer implementation and TextDecoder only supports utf-8`);
-            return Buffer.from(buffer).toString(<any>options.encoding || 'utf-8');
+                throw new Error(`Encoding '${encoding}' is not supported: No Node.js Buffer implementation and TextDecoder only supports utf-8`);
+            return Buffer.from(buffer).toString(<BufferEncoding>encoding);
         }
     }
 

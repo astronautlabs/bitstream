@@ -24,6 +24,49 @@ describe('BitstreamReader', it => {
         bitstream.readSync(8);
         expect(bitstream.bufferIndex === 0);
     });
+    it('clean() causes buffers to be discarded when retainBuffers=true', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.retainBuffers = true;
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123, 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex).to.equal(1);
+        expect(bitstream.offset).to.equal(8);
+        bitstream.clean();
+        expect(bitstream.bufferIndex).to.equal(0);
+        expect(bitstream.offset).to.equal(8);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex).to.equal(0);
+        expect(bitstream.offset).to.equal(16);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex).to.equal(1);
+        expect(bitstream.offset).to.equal(24);
+        bitstream.readSync(8);
+        bitstream.clean();
+        expect(bitstream.bufferIndex).to.equal(0);
+        expect(bitstream.offset).to.equal(32);
+    });
+    it('clean() frees only the number of requested buffers', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.retainBuffers = true;
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123, 123 ]));
+        
+        bitstream.readSync(8);
+        bitstream.readSync(8);
+        bitstream.readSync(8);
+        
+        expect(bitstream.bufferIndex).to.equal(3);
+        bitstream.clean(1);
+        expect(bitstream.bufferIndex).to.equal(2);
+        bitstream.clean(1);
+        expect(bitstream.bufferIndex).to.equal(1);
+        bitstream.clean(1);
+        expect(bitstream.bufferIndex).to.equal(0);
+    });
     it('spentBufferSize tracks read bits properly', () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 123 ]));
@@ -291,7 +334,7 @@ describe('BitstreamReader', it => {
         expect(bitstream.readSync(4)).to.equal(0b0100);
     });
 
-    it('correctly handles signed integers', () => {
+    it('readSignedSync() correctly handles signed integers', () => {
         let bitstream = new BitstreamReader();
         
         bitstream.addBuffer(Buffer.from([ 0xFB ])); expect(bitstream.readSignedSync(8)).to.equal(-5);
@@ -306,8 +349,27 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(Buffer.from([ 0x00, 0x01, 0x8F, 0xC0 ])); expect(bitstream.readSignedSync(32)).to.equal(102336);
         bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0 ])); expect(bitstream.readSignedSync(32)).to.equal(0);
     });
+    it('readSigned() correctly handles signed integers', async () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 0xFB ])); expect(await bitstream.readSigned(8)).to.equal(-5);
+        bitstream.addBuffer(Buffer.from([ 5 ])); expect(await bitstream.readSigned(8)).to.equal(5);
+        bitstream.addBuffer(Buffer.from([ 0 ])); expect(await bitstream.readSigned(8)).to.equal(0);
 
-    it('correctly handles floats', () => {
+        bitstream.addBuffer(Buffer.from([ 0xFC, 0x0A ])); expect(await bitstream.readSigned(16)).to.equal(-1014);
+        bitstream.addBuffer(Buffer.from([ 0x03, 0xF6 ])); expect(await bitstream.readSigned(16)).to.equal(1014);
+        bitstream.addBuffer(Buffer.from([ 0, 0 ])); expect(await bitstream.readSigned(16)).to.equal(0);
+
+        bitstream.addBuffer(Buffer.from([ 0xFF, 0xFE, 0x70, 0x40 ])); expect(await bitstream.readSigned(32)).to.equal(-102336);
+        bitstream.addBuffer(Buffer.from([ 0x00, 0x01, 0x8F, 0xC0 ])); expect(await bitstream.readSigned(32)).to.equal(102336);
+        bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0 ])); expect(await bitstream.readSigned(32)).to.equal(0);
+    });
+    it('readSigned() can wait until data is available', async () => {
+        let bitstream = new BitstreamReader();
+        setTimeout(() => bitstream.addBuffer(Buffer.from([ 0xFB ])), 10); 
+        expect(await bitstream.readSigned(8)).to.equal(-5);
+    });
+
+    it('readFloatSync() correctly handles floats', () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 0x42, 0xCD, 0x00, 0x00 ])); expect(bitstream.readFloatSync(32)).to.equal(102.5);
         bitstream.addBuffer(Buffer.from([ 0xC3, 0xDA, 0x00, 0x00 ])); expect(bitstream.readFloatSync(32)).to.equal(-436);
@@ -320,7 +382,95 @@ describe('BitstreamReader', it => {
         expect(bitstream.readFloatSync(64)).to.equal(-327721.17);
 
         bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0, 0, 0, 0, 0 ])); 
-        expect(bitstream.readSignedSync(64)).to.equal(0);
+        expect(bitstream.readFloatSync(64)).to.equal(0);
+    });
+
+    it('readFloat() correctly handles floats', async () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 0x42, 0xCD, 0x00, 0x00 ])); expect(await bitstream.readFloat(32)).to.equal(102.5);
+        bitstream.addBuffer(Buffer.from([ 0xC3, 0xDA, 0x00, 0x00 ])); expect(await bitstream.readFloat(32)).to.equal(-436);
+        bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0 ])); expect(await bitstream.readFloat(32)).to.equal(0);
+        
+        bitstream.addBuffer(Buffer.from([ 0x41, 0x60, 0xae, 0x29, 0x71, 0xeb, 0x85, 0x1f ])); 
+        expect(await bitstream.readFloat(64)).to.equal(8745291.56);
+
+        bitstream.addBuffer(Buffer.from([ 0xc1, 0x14, 0x00, 0xa4, 0xae, 0x14, 0x7a, 0xe1 ])); 
+        expect(await bitstream.readFloat(64)).to.equal(-327721.17);
+
+        bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0, 0, 0, 0, 0 ])); 
+        expect(await bitstream.readFloat(64)).to.equal(0);
+    });
+
+    it('readFloat() can wait until data is available', async () => {
+        let bitstream = new BitstreamReader();
+        setTimeout(() => bitstream.addBuffer(Buffer.from([ 0x42, 0xCD, 0x00, 0x00 ])), 10);
+        expect(await bitstream.readFloat(32)).to.equal(102.5);
+    });
+
+    it('readFloatSync() throws when requesting lengths other than 32 or 64', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.alloc(32));
+
+        try {
+            bitstream.readFloatSync(13);
+            throw new Error(`Expected throw`);
+        } catch (e) { }
+    });
+
+    it('peek() reads an unsigned integer without consuming it', async () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 37 ]));
+
+        expect(await bitstream.peek(8)).to.equal(37);
+        expect(bitstream.offset).to.equal(0);
+        expect(await bitstream.peek(8)).to.equal(37);
+        expect(await bitstream.peek(8)).to.equal(37);
+        expect(await bitstream.peek(8)).to.equal(37);
+        expect(await bitstream.peek(8)).to.equal(37);
+        expect(await bitstream.peek(8)).to.equal(37);
+        expect(bitstream.offset).to.equal(0);
+    });
+
+    it('readFloatSync() throws when not enough bits are available', () => {
+        let bitstream = new BitstreamReader();
+
+        try {
+            bitstream.readFloatSync(32);
+            throw new Error(`Expected throw`);
+        } catch (e) { }
+    });
+
+    it('readSync() throws when not enough bits are available', () => {
+        let bitstream = new BitstreamReader();
+
+        try {
+            bitstream.readSync(32);
+            throw new Error(`Expected throw`);
+        } catch (e) { }
+    });
+
+    it('readSignedSync() throws when not enough bits are available', () => {
+        let bitstream = new BitstreamReader();
+
+        try {
+            bitstream.readSignedSync(32);
+            throw new Error(`Expected throw`);
+        } catch (e) { }
+    });
+
+    it('read() fast paths when enough bits are available', async () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.alloc(1));
+
+        let promise = bitstream.read(8);
+        expect(bitstream['blockedRequest']).to.be.null;
+        expect(await promise).to.equal(0);
+    });
+
+    it('read() can wait until enough bits are available', async () => {
+        let bitstream = new BitstreamReader();
+        setTimeout(() => bitstream.addBuffer(Buffer.from([12])), 10);
+        expect(await bitstream.read(8)).to.equal(12);
     });
 
     it('correctly handles NaN', () => {
@@ -378,19 +528,67 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(buf);
         expect(bitstream.readStringSync(10)).to.equal("hello");
     });
-    it.skip('readStringSync() reads utf16le correctly', () => {
+    it('readStringSync() reads utf16le correctly', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(32);
         buf.write('hello', 'utf16le');
         bitstream.addBuffer(buf);
-        expect(bitstream.readStringSync(10, { encoding: 'utf16le' })).to.equal("hello");
+        expect(bitstream.readStringSync(16, { encoding: 'utf16le' })).to.equal("hello");
     });
-    it.skip('readStringSync() reads ucs-2 correctly', () => {
+    it('readStringSync() reads ucs-2 correctly', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(32);
         buf.write('hello', 'ucs-2');
         bitstream.addBuffer(buf);
-        expect(bitstream.readStringSync(10, { encoding: 'ucs-2' })).to.equal("hello");
+        expect(bitstream.readStringSync(16, { encoding: 'ucs-2' })).to.equal("hello");
+    });
+    it('readStringSync() detects string terminator even when half the last character is missing', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(32);
+        buf.write('hello', 'ucs-2');
+        bitstream.addBuffer(buf);
+        expect(bitstream.readStringSync(11, { encoding: 'ucs-2' })).to.equal("hello");
+    });
+    it('readStringSync() throws with an invalid encoding', () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.alloc(32);
+        buf.write('hello', 'ucs-2');
+        bitstream.addBuffer(buf);
+        try {
+            bitstream.readStringSync(16, { encoding: 'not-a-real-encoding' });
+            throw new Error(`Expected throw`);
+        } catch (e) { }
+    });
+    it('readStringSync() throws with any encoding other than utf-8 when Buffer is not available', () => {
+
+        let buf = Buffer.alloc(32);
+        const BufferT = Buffer;
+        (globalThis as any).Buffer = undefined;
+        try {
+            let bitstream = new BitstreamReader();
+            buf.write('hello', 'utf16le');
+            bitstream.addBuffer(buf);
+            try {
+                bitstream.readStringSync(16, { encoding: 'utf16le' });
+                throw new Error(`Expected throw`);
+            } catch (e) { }
+        } finally {
+            (globalThis as any).Buffer = BufferT;
+        }
+    });
+    it('readStringSync() supports utf-8 even when Buffer is not present', () => {
+
+        let buf = Buffer.alloc(32);
+        const BufferT = Buffer;
+        (globalThis as any).Buffer = undefined;
+        try {
+            let bitstream = new BitstreamReader();
+            buf.write('hello', 'utf-8');
+            bitstream.addBuffer(buf);
+            expect(bitstream.readStringSync(16, { encoding: 'utf-8' })).to.equal('hello');
+        } finally {
+            (globalThis as any).Buffer = BufferT;
+        }
     });
     it('readString() reads a string correctly when the data is already available', async () => {
         let bitstream = new BitstreamReader();
