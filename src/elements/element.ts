@@ -903,7 +903,7 @@ export class BitstreamElement {
      * @param generator 
      * @returns 
      */
-    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : TypeReadOptions): InstanceType<T> {
+    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : TypeReadOptions = {}): InstanceType<T> {
 
         let generator = this.read(reader, options);
         let result = generator.next();
@@ -919,23 +919,28 @@ export class BitstreamElement {
      * @param reader The reader to read from
      * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
      */
-    static tryRead<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): InstanceType<T> {
-        let instance = new this();
-        let iterator = <Generator<number, InstanceType<T>>> this.generatedReader(reader, instance, parent);
+    static tryRead<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : TypeReadOptions = {}): InstanceType<T> {
         let previouslyRetaining = reader.retainBuffers;
-
-        reader.retainBuffers = true;
         let startOffset = reader.offset;
 
-        let result = iterator.next();
-        if (result.done === false) {
-            // we need more bits, fail
-            reader.offset = startOffset;
-            reader.retainBuffers = previouslyRetaining;
-            return undefined;
-        }
+        try {
+            reader.retainBuffers = true;
 
-        return result.value;
+            let iterator = this.read(reader, options);
+            let result = iterator.next();
+            if (result.done === false) {
+                // we need more bits, fail
+                reader.offset = startOffset;
+                return undefined;
+            }
+
+            return result.value;
+        } catch (e) {
+            reader.offset = startOffset;
+            throw e;
+        } finally {
+            reader.retainBuffers = previouslyRetaining;
+        }
     }
 
     /**
