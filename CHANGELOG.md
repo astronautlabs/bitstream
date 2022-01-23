@@ -10,7 +10,8 @@ Breaking changes:
 - Removed the `BitstreamReader.unread()` method which has been deprecated since `v1.0.1` released March 28, 2021.
 - The `BitstreamElement.read()` family of operations now accepts an options bag instead of positional parameters
 - An exception will now be thrown when trying to serialize (+/-) `Infinity` to an integer number field (either signed or unsigned)
-
+- `BitstreamElement.deserialize()` no longer returns a Promise. The operation has not been asynchronous since the 
+  generator rewrite in 2.0, so promises are not required here and unnecessarily complicate efficient deserialization.
 # v2.1.1
 - Fix: `@ReservedLow` should actually emit low bits 
 
