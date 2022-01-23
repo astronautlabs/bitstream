@@ -222,6 +222,9 @@ If none of these options fit your use case, you can write a custom `Serializer`.
 Elements can also handle serializing fixed-length strings. For example, to represent a fixed-length 5-byte string, 
 set the length to `5` (note that this differs from other types where the length is specified in bits).
 
+> **Note:** Null-termination is the default here, make sure to set `nullTerminated` to `false` if you do not desire
+> that behavior.
+
 ```typescript
     @Field(5) stringField : string;
 ```
