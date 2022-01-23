@@ -94,6 +94,8 @@ export class BitstreamWriter {
         if (value === void 0 || value === null)
             value = 0;
         
+        value = Number(value);
+        
         if (Number.isNaN(value))
             throw new Error(`Cannot write to bitstream: Value ${value} is not a number`);
         if (!Number.isFinite(value))
@@ -125,6 +127,11 @@ export class BitstreamWriter {
     }
 
     writeSigned(length : number, value : number) {
+        if (value === undefined || value === null)
+            value = 0;
+        
+        value = Number(value);
+
         if (Number.isNaN(value))
             throw new Error(`Cannot write to bitstream: Value ${value} is not a number`);
         if (!Number.isFinite(value))
@@ -134,7 +141,6 @@ export class BitstreamWriter {
         const min = -(2**(length - 1)); // ie -128
         const originalValue = value;
 
-        value = Number(value);
 
         if (!Number.isFinite(value))
             throw new TypeError(`Value must be finite. Value was: ${JSON.stringify(originalValue)}`);

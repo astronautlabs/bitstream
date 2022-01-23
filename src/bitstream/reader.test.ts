@@ -187,4 +187,21 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0, 0, 0, 0, 0 ])); 
         expect(bitstream.readSignedSync(64)).to.equal(0);
     });
+
+    it('correctly handles NaN', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 0x7F, 0xC0, 0x00, 0x00 ])); expect(bitstream.readFloatSync(32)).to.be.NaN;
+        
+        bitstream.addBuffer(Buffer.from([ 0x7f, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])); 
+        expect(bitstream.readFloatSync(64)).to.be.NaN;
+    });
+
+    it('correctly handles Infinity', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 0x7f, 0x80, 0x00, 0x00 ])); 
+        expect(bitstream.readFloatSync(32)).not.to.be.finite;
+        
+        bitstream.addBuffer(Buffer.from([ 0x7f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])); 
+        expect(bitstream.readFloatSync(64)).not.to.be.finite;
+    });
 });
