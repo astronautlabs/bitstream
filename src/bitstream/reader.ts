@@ -400,16 +400,6 @@ export class BitstreamReader {
     }
 
     /**
-     * Add a buffer onto the end of the bitstream. Important: This method does not insert the data at the 
-     * current read head, it places it at the end of the bitstream. 
-     * @param buffer The buffer to add to the bitstream
-     * @deprecated Use addBuffer() instead
-     */
-    unread(buffer : Uint8Array) {
-        this.buffers.unshift(buffer);
-    }
-    
-    /**
      * Add a buffer onto the end of the bitstream.
      * @param buffer The buffer to add to the bitstream
      */

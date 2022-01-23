@@ -5,7 +5,7 @@ Features:
 - Ability to read/write signed (two's complement) integers
 
 Breaking changes:
-- TBD
+- Removed the `BitstreamReader.unread()` method which has been deprecated since `v1.0.1` released March 28, 2021.
 
 # v2.1.1
 - Fix: `@ReservedLow` should actually emit low bits 
