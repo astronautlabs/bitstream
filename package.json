@@ -6,7 +6,15 @@
   "module": "dist.esm/index.js",
   "types": "dist/index.d.ts",
   "private": false,
-  "keywords": [ "bitstream", "serialization", "parsing", "binary", "protocol", "network", "syntax" ],
+  "keywords": [
+    "bitstream",
+    "serialization",
+    "parsing",
+    "binary",
+    "protocol",
+    "network",
+    "syntax"
+  ],
   "scripts": {
     "clean": "rimraf dist dist.esm",
     "build": "npm run clean && tsc -b && tsc -b tsconfig.esm.json",
@@ -26,7 +34,6 @@
     "@types/chai": "^4.2.14",
     "@types/node": "^14.0.4",
     "@types/reflect-metadata": "^0.1.0",
-    "@types/stream-buffers": "^3.0.3",
     "chai": "^4.2.0",
     "razmin": "^0.6.20",
     "rimraf": "^3.0.2",
