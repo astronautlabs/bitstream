@@ -208,7 +208,7 @@ export class BitstreamReader {
         const u = this.readSync(length);
         const signBit = (2**(length - 1));
         const mask = signBit - 1;
-        return (u & signBit) === 0 ? u : -(~(u - 1) & mask) >>> 0;
+        return (u & signBit) === 0 ? u : -((~(u - 1) & mask) >>> 0);
     }
 
     /**

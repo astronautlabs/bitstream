@@ -155,4 +155,36 @@ describe('BitstreamReader', it => {
         expect(bitstream.readSync(4)).to.equal(0b0101);
         expect(bitstream.readSync(4)).to.equal(0b0100);
     });
+
+    it('correctly handles signed integers', () => {
+        let bitstream = new BitstreamReader();
+        
+        bitstream.addBuffer(Buffer.from([ 0xFB ])); expect(bitstream.readSignedSync(8)).to.equal(-5);
+        bitstream.addBuffer(Buffer.from([ 5 ])); expect(bitstream.readSignedSync(8)).to.equal(5);
+        bitstream.addBuffer(Buffer.from([ 0 ])); expect(bitstream.readSignedSync(8)).to.equal(0);
+
+        bitstream.addBuffer(Buffer.from([ 0xFC, 0x0A ])); expect(bitstream.readSignedSync(16)).to.equal(-1014);
+        bitstream.addBuffer(Buffer.from([ 0x03, 0xF6 ])); expect(bitstream.readSignedSync(16)).to.equal(1014);
+        bitstream.addBuffer(Buffer.from([ 0, 0 ])); expect(bitstream.readSignedSync(16)).to.equal(0);
+
+        bitstream.addBuffer(Buffer.from([ 0xFF, 0xFE, 0x70, 0x40 ])); expect(bitstream.readSignedSync(32)).to.equal(-102336);
+        bitstream.addBuffer(Buffer.from([ 0x00, 0x01, 0x8F, 0xC0 ])); expect(bitstream.readSignedSync(32)).to.equal(102336);
+        bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0 ])); expect(bitstream.readSignedSync(32)).to.equal(0);
+    });
+
+    it('correctly handles floats', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 0x42, 0xCD, 0x00, 0x00 ])); expect(bitstream.readFloatSync(32)).to.equal(102.5);
+        bitstream.addBuffer(Buffer.from([ 0xC3, 0xDA, 0x00, 0x00 ])); expect(bitstream.readFloatSync(32)).to.equal(-436);
+        bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0 ])); expect(bitstream.readFloatSync(32)).to.equal(0);
+        
+        bitstream.addBuffer(Buffer.from([ 0x41, 0x60, 0xae, 0x29, 0x71, 0xeb, 0x85, 0x1f ])); 
+        expect(bitstream.readFloatSync(64)).to.equal(8745291.56);
+
+        bitstream.addBuffer(Buffer.from([ 0xc1, 0x14, 0x00, 0xa4, 0xae, 0x14, 0x7a, 0xe1 ])); 
+        expect(bitstream.readFloatSync(64)).to.equal(-327721.17);
+
+        bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0, 0, 0, 0, 0 ])); 
+        expect(bitstream.readSignedSync(64)).to.equal(0);
+    });
 });
