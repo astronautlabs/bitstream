@@ -903,15 +903,14 @@ export class BitstreamElement {
      * @param generator 
      * @returns 
      */
-    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): InstanceType<T> {
-        let iterator = <Generator<number, InstanceType<T>>> this.generatedReader(reader, parent);
-        do {
-            let result = iterator.next();
-            if (result.done === false)
-                throw new Error(`Not enough bits: Reached end of buffer while trying to read ${result.value} bits!`);
+    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : TypeReadOptions): InstanceType<T> {
 
-            return result.value;
-        } while (true);
+        let generator = this.read(reader, options);
+        let result = generator.next();
+
+        if (result.done === false)
+            throw new Error(`Not enough bits: Reached end of buffer while trying to read ${result.value} bits!`);
+        return result.value;
     }
 
     /**
@@ -928,17 +927,15 @@ export class BitstreamElement {
         reader.retainBuffers = true;
         let startOffset = reader.offset;
 
-        do {
-            let result = iterator.next();
-            if (result.done === false) {
-                // we need more bits, fail
-                reader.offset = startOffset;
-                reader.retainBuffers = previouslyRetaining;
-                return undefined;
-            }
+        let result = iterator.next();
+        if (result.done === false) {
+            // we need more bits, fail
+            reader.offset = startOffset;
+            reader.retainBuffers = previouslyRetaining;
+            return undefined;
+        }
 
-            return result.value;
-        } while (true);
+        return result.value;
     }
 
     /**
