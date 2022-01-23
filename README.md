@@ -14,6 +14,17 @@ The library can be used both on the server-side (Node.js) and in the browser.
 
 `npm install @astronautlabs/bitstream`
 
+# Libraries using Bitstream
+
+The following libraries are using Bitstream. They are great examples of what you can do with it! If you would like your
+library to be listed here, please send a pull request!
+
+- https://github.com/astronautlabs/st2010
+- https://github.com/astronautlabs/st291
+- https://github.com/astronautlabs/scte35
+- https://github.com/astronautlabs/scte104
+- https://github.com/astronautlabs/rfc8331
+
 # BitstreamReader: Reading from bitstreams imperatively
 
 ```typescript
@@ -115,7 +126,7 @@ writer.write(length, value);
 Examples of writables you can use include:
 - Node.js' writable streams (`Writable` from the `stream` package)
 - `WritableStreamDefaultWriter` from the WHATWG Streams specification in the browser
-- Any custom object which implements the `Writer` interface
+- Any custom object which implements the `Writable` interface
 
 The `bufferLength` parameter determines how many bytes will be buffered before the buffer will be flushed out to the 
 passed writable stream. This parameter is optional, the default (and minimum value) is `1` (one byte per buffer).
@@ -200,7 +211,7 @@ You can customize this behavior using the boolean field options (ie `@Field(8, {
 - `undefined`: The numeric value to use when writing `undefined` (default `0`)
 - `mode`: How to handle novel inputs when reading:
     - `"true-unless"`: The value is true unless the numeric value chosen for 'false' is observed
-    - `"false-unless"`: The value is false unless the numeric value chosen for 'true' is observed
+    - `"false-unless"`: The value is false unless the numeric value chosen for 'true' is observed (default mode)
     - `"undefined"`: The value is `true` if the numeric value for 'true' is observed, `false` if the numeric value for 
       'false' is observed and `undefined` otherwise. 
 
@@ -550,6 +561,12 @@ Serialize to a Buffer using:
 ```typescript
 let buffer = element.serialize();
 ```
+
+## Custom Serializers 
+
+`BitstreamElement` can be extended to support arbitrary field types by implementing new serializers. Simply 
+implement the `Serializer` interface and use the `serializer` option on the `@Field()` properties you wish to use it 
+with.
 
 ## Advanced element serialization
 
