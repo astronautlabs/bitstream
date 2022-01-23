@@ -24,7 +24,7 @@ describe('BitstreamReader', it => {
         bitstream.readSync(8);
         expect(bitstream.bufferIndex === 0);
     });
-    it('clean() causes buffers to be discarded when retainBuffers=true', () => {
+    it('.clean() causes buffers to be discarded when retainBuffers=true', () => {
         let bitstream = new BitstreamReader();
         bitstream.retainBuffers = true;
         bitstream.addBuffer(Buffer.from([ 123 ]));
@@ -47,7 +47,7 @@ describe('BitstreamReader', it => {
         expect(bitstream.bufferIndex).to.equal(0);
         expect(bitstream.offset).to.equal(32);
     });
-    it('clean() frees only the number of requested buffers', () => {
+    it('.clean() frees only the number of requested buffers', () => {
         let bitstream = new BitstreamReader();
         bitstream.retainBuffers = true;
         bitstream.addBuffer(Buffer.from([ 123 ]));
@@ -334,7 +334,7 @@ describe('BitstreamReader', it => {
         expect(bitstream.readSync(4)).to.equal(0b0100);
     });
 
-    it('readSignedSync() correctly handles signed integers', () => {
+    it('.readSignedSync() correctly handles signed integers', () => {
         let bitstream = new BitstreamReader();
         
         bitstream.addBuffer(Buffer.from([ 0xFB ])); expect(bitstream.readSignedSync(8)).to.equal(-5);
@@ -349,7 +349,7 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(Buffer.from([ 0x00, 0x01, 0x8F, 0xC0 ])); expect(bitstream.readSignedSync(32)).to.equal(102336);
         bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0 ])); expect(bitstream.readSignedSync(32)).to.equal(0);
     });
-    it('readSigned() correctly handles signed integers', async () => {
+    it('.readSigned() correctly handles signed integers', async () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 0xFB ])); expect(await bitstream.readSigned(8)).to.equal(-5);
         bitstream.addBuffer(Buffer.from([ 5 ])); expect(await bitstream.readSigned(8)).to.equal(5);
@@ -363,13 +363,13 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(Buffer.from([ 0x00, 0x01, 0x8F, 0xC0 ])); expect(await bitstream.readSigned(32)).to.equal(102336);
         bitstream.addBuffer(Buffer.from([ 0, 0, 0, 0 ])); expect(await bitstream.readSigned(32)).to.equal(0);
     });
-    it('readSigned() can wait until data is available', async () => {
+    it('.readSigned() can wait until data is available', async () => {
         let bitstream = new BitstreamReader();
         setTimeout(() => bitstream.addBuffer(Buffer.from([ 0xFB ])), 10); 
         expect(await bitstream.readSigned(8)).to.equal(-5);
     });
 
-    it('readFloatSync() correctly handles floats', () => {
+    it('.readFloatSync() correctly handles floats', () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 0x42, 0xCD, 0x00, 0x00 ])); expect(bitstream.readFloatSync(32)).to.equal(102.5);
         bitstream.addBuffer(Buffer.from([ 0xC3, 0xDA, 0x00, 0x00 ])); expect(bitstream.readFloatSync(32)).to.equal(-436);
@@ -385,7 +385,7 @@ describe('BitstreamReader', it => {
         expect(bitstream.readFloatSync(64)).to.equal(0);
     });
 
-    it('readFloat() correctly handles floats', async () => {
+    it('.readFloat() correctly handles floats', async () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.from([ 0x42, 0xCD, 0x00, 0x00 ])); expect(await bitstream.readFloat(32)).to.equal(102.5);
         bitstream.addBuffer(Buffer.from([ 0xC3, 0xDA, 0x00, 0x00 ])); expect(await bitstream.readFloat(32)).to.equal(-436);
@@ -401,13 +401,13 @@ describe('BitstreamReader', it => {
         expect(await bitstream.readFloat(64)).to.equal(0);
     });
 
-    it('readFloat() can wait until data is available', async () => {
+    it('.readFloat() can wait until data is available', async () => {
         let bitstream = new BitstreamReader();
         setTimeout(() => bitstream.addBuffer(Buffer.from([ 0x42, 0xCD, 0x00, 0x00 ])), 10);
         expect(await bitstream.readFloat(32)).to.equal(102.5);
     });
 
-    it('readFloatSync() throws when requesting lengths other than 32 or 64', () => {
+    it('.readFloatSync() throws when requesting lengths other than 32 or 64', () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.alloc(32));
 
@@ -431,7 +431,7 @@ describe('BitstreamReader', it => {
         expect(bitstream.offset).to.equal(0);
     });
 
-    it('readFloatSync() throws when not enough bits are available', () => {
+    it('.readFloatSync() throws when not enough bits are available', () => {
         let bitstream = new BitstreamReader();
 
         try {
@@ -449,7 +449,7 @@ describe('BitstreamReader', it => {
         } catch (e) { }
     });
 
-    it('readSignedSync() throws when not enough bits are available', () => {
+    it('.readSignedSync() throws when not enough bits are available', () => {
         let bitstream = new BitstreamReader();
 
         try {
@@ -458,7 +458,7 @@ describe('BitstreamReader', it => {
         } catch (e) { }
     });
 
-    it('read() fast paths when enough bits are available', async () => {
+    it('.read() fast paths when enough bits are available', async () => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.alloc(1));
 
@@ -467,7 +467,7 @@ describe('BitstreamReader', it => {
         expect(await promise).to.equal(0);
     });
 
-    it('read() can wait until enough bits are available', async () => {
+    it('.read() can wait until enough bits are available', async () => {
         let bitstream = new BitstreamReader();
         setTimeout(() => bitstream.addBuffer(Buffer.from([12])), 10);
         expect(await bitstream.read(8)).to.equal(12);
@@ -489,7 +489,7 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(Buffer.from([ 0x7f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])); 
         expect(bitstream.readFloatSync(64)).not.to.be.finite;
     });
-    it('read() allows only one async read at a time', async () => {
+    it('.read() allows only one async read at a time', async () => {
         let bitstream = new BitstreamReader();
         bitstream.read(8);
         try {
@@ -497,7 +497,7 @@ describe('BitstreamReader', it => {
             throw new Error(`Expected read() to throw`);
         } catch (e) {}
     });
-    it('assure() allows only one async call at a time', async () => {
+    it('.assure() allows only one async call at a time', async () => {
         let bitstream = new BitstreamReader();
         bitstream.assure(8);
         try {
@@ -505,7 +505,7 @@ describe('BitstreamReader', it => {
             throw new Error(`Expected assure() to throw`);
         } catch (e) {}
     });
-    it('readStringSync() reads a string correctly', () => {
+    it('.readStringSync() reads a string correctly', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(10);
         buf.write('hello', 'utf-8');
@@ -513,7 +513,7 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(buf);
         expect(bitstream.readStringSync(10)).to.equal('hello');
     });
-    it('readStringSync() reads a non-null-terminated string correctly', () => {
+    it('.readStringSync() reads a non-null-terminated string correctly', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(10);
         buf.write('hello', 'utf-8');
@@ -521,35 +521,35 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(buf);
         expect(bitstream.readStringSync(10, { nullTerminated: false })).to.equal("hello\0\0\0\0\0");
     });
-    it('readStringSync() reads an ASCII string correctly', () => {
+    it('.readStringSync() reads an ASCII string correctly', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(10);
         buf.write('hello', 'ascii');
         bitstream.addBuffer(buf);
         expect(bitstream.readStringSync(10)).to.equal("hello");
     });
-    it('readStringSync() reads utf16le correctly', () => {
+    it('.readStringSync() reads utf16le correctly', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(32);
         buf.write('hello', 'utf16le');
         bitstream.addBuffer(buf);
         expect(bitstream.readStringSync(16, { encoding: 'utf16le' })).to.equal("hello");
     });
-    it('readStringSync() reads ucs-2 correctly', () => {
+    it('.readStringSync() reads ucs-2 correctly', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(32);
         buf.write('hello', 'ucs-2');
         bitstream.addBuffer(buf);
         expect(bitstream.readStringSync(16, { encoding: 'ucs-2' })).to.equal("hello");
     });
-    it('readStringSync() detects string terminator even when half the last character is missing', () => {
+    it('.readStringSync() detects string terminator even when half the last character is missing', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(32);
         buf.write('hello', 'ucs-2');
         bitstream.addBuffer(buf);
         expect(bitstream.readStringSync(11, { encoding: 'ucs-2' })).to.equal("hello");
     });
-    it('readStringSync() throws with an invalid encoding', () => {
+    it('.readStringSync() throws with an invalid encoding', () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(32);
         buf.write('hello', 'ucs-2');
@@ -559,7 +559,7 @@ describe('BitstreamReader', it => {
             throw new Error(`Expected throw`);
         } catch (e) { }
     });
-    it('readStringSync() throws with any encoding other than utf-8 when Buffer is not available', () => {
+    it('.readStringSync() throws with any encoding other than utf-8 when Buffer is not available', () => {
 
         let buf = Buffer.alloc(32);
         const BufferT = Buffer;
@@ -576,7 +576,7 @@ describe('BitstreamReader', it => {
             (globalThis as any).Buffer = BufferT;
         }
     });
-    it('readStringSync() supports utf-8 even when Buffer is not present', () => {
+    it('.readStringSync() supports utf-8 even when Buffer is not present', () => {
 
         let buf = Buffer.alloc(32);
         const BufferT = Buffer;
@@ -590,7 +590,7 @@ describe('BitstreamReader', it => {
             (globalThis as any).Buffer = BufferT;
         }
     });
-    it('readString() reads a string correctly when the data is already available', async () => {
+    it('.readString() reads a string correctly when the data is already available', async () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(10);
         buf.write('hello', 'utf-8');
@@ -598,7 +598,7 @@ describe('BitstreamReader', it => {
         bitstream.addBuffer(buf);
         expect(await bitstream.readString(10)).to.equal('hello');
     });
-    it('readString() reads a string correctly when the data is not yet available', async () => {
+    it('.readString() reads a string correctly when the data is not yet available', async () => {
         let bitstream = new BitstreamReader();
         let buf = Buffer.alloc(10);
         buf.write('hello', 'utf-8');
