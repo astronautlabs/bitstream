@@ -95,7 +95,7 @@ export class BitstreamWriter {
             value = 0;
         
         value = Number(value);
-        
+
         if (Number.isNaN(value))
             throw new Error(`Cannot write to bitstream: Value ${value} is not a number`);
         if (!Number.isFinite(value))
@@ -130,27 +130,18 @@ export class BitstreamWriter {
         if (value === undefined || value === null)
             value = 0;
         
+        const originalValue = value;
+        const max = 2**(length - 1) - 1; // ie 127
+        const min = -(2**(length - 1)); // ie -128
+
         value = Number(value);
 
         if (Number.isNaN(value))
-            throw new Error(`Cannot write to bitstream: Value ${value} is not a number`);
+            throw new Error(`Cannot write to bitstream: Value ${originalValue} is not a number`);
         if (!Number.isFinite(value))
             throw new Error(`Cannot write to bitstream: Value ${value} must be finite`);
-
-        const max = 2**(length - 1) - 1; // ie 127
-        const min = -(2**(length - 1)); // ie -128
-        const originalValue = value;
-
-
-        if (!Number.isFinite(value))
-            throw new TypeError(`Value must be finite. Value was: ${JSON.stringify(originalValue)}`);
-        
-        if (Number.isNaN(value))
-            throw new TypeError(`Value is not a number (NaN). Passed value was: ${JSON.stringify(originalValue)}`);
-            
         if (value > max)
             throw new TypeError(`Cannot represent ${value} in I${length} format: Value too large (min=${min}, max=${max})`);
-
         if (value < min)
             throw new TypeError(`Cannot represent ${value} in I${length} format: Negative value too small (min=${min}, max=${max})`);
         
