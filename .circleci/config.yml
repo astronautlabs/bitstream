@@ -20,6 +20,7 @@ commands:
             - node_modules
           key: v1-dependencies-<< parameters.version >>-{{ checksum "package.json" }}
       - run: npm test
+      - run: npm test # perhaps this will fix coverage reporting?
       - store_artifacts:
           path: coverage
 jobs:
