@@ -10,6 +10,124 @@ describe('BitstreamReader', it => {
         expect(bitstream.readSync(8)).to.equal(123);
     });
 
+    it('bufferIndex is always zero when retainBuffers=false', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123, 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        expect(bitstream.bufferIndex === 0);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex === 0);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex === 0);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex === 0);
+    });
+    it('spentBufferSize tracks read bits properly', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123, 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        expect(bitstream.spentBufferSize === 0);
+        bitstream.readSync(8);
+        expect(bitstream.spentBufferSize === 8);
+        bitstream.readSync(8);
+        expect(bitstream.spentBufferSize === 8);
+        bitstream.readSync(8);
+        expect(bitstream.spentBufferSize === 24);
+    });
+    it('offset should start at zero', () => {
+        let bitstream = new BitstreamReader();
+        expect(bitstream.offset).to.equal(0);
+        bitstream.addBuffer(Buffer.from([ 1, 2, 3, 4, 5, 6 ]));
+        expect(bitstream.offset).to.equal(0);
+    });
+    it('offset should not move as buffers are added', () => {
+        let bitstream = new BitstreamReader();
+        expect(bitstream.offset).to.equal(0);
+        bitstream.addBuffer(Buffer.from([ 1, 2, 3, 4, 5, 6 ]));
+        expect(bitstream.offset).to.equal(0);
+        bitstream.readSync(8);
+        bitstream.addBuffer(Buffer.from([ 1, 2, 3, 4, 5, 6 ]));
+        expect(bitstream.offset).to.equal(8);
+    });
+    it('setting offset allows seeking within current buffer', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 1, 2, 3, 4, 5, 6 ]));
+
+        expect(bitstream.readSync(8)).to.equal(1);
+        expect(bitstream.readSync(8)).to.equal(2);
+        expect(bitstream.readSync(8)).to.equal(3);
+
+        bitstream.offset = 0;
+        expect(bitstream.readSync(8)).to.equal(1);
+        expect(bitstream.readSync(8)).to.equal(2);
+        expect(bitstream.readSync(8)).to.equal(3);
+
+        bitstream.offset = 8;
+        expect(bitstream.readSync(8)).to.equal(2);
+        expect(bitstream.readSync(8)).to.equal(3);
+        expect(bitstream.readSync(8)).to.equal(4);
+
+        bitstream.offset = 0;
+        expect(bitstream.readSync(8)).to.equal(1);
+        expect(bitstream.readSync(8)).to.equal(2);
+        expect(bitstream.readSync(8)).to.equal(3);
+    });
+    it('setting offset allows seeking into previous buffers when retainBuffers=true', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.retainBuffers = true;
+        bitstream.addBuffer(Buffer.from([ 1, 2, 3 ]));
+        bitstream.addBuffer(Buffer.from([ 4, 5, 6 ]));
+
+        expect(bitstream.readSync(8)).to.equal(1);
+        expect(bitstream.readSync(8)).to.equal(2);
+        expect(bitstream.readSync(8)).to.equal(3);
+        expect(bitstream.readSync(8)).to.equal(4);
+        expect(bitstream.readSync(8)).to.equal(5);
+        expect(bitstream.readSync(8)).to.equal(6);
+
+        bitstream.offset = 8*3;
+        expect(bitstream.readSync(8)).to.equal(4);
+        expect(bitstream.readSync(8)).to.equal(5);
+        expect(bitstream.readSync(8)).to.equal(6);
+
+        bitstream.offset = 0;
+        expect(bitstream.readSync(8)).to.equal(1);
+        expect(bitstream.readSync(8)).to.equal(2);
+        expect(bitstream.readSync(8)).to.equal(3);
+    });
+    it('offset is always increasing even when retainBuffers=false', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123, 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        expect(bitstream.offset === 0);
+        bitstream.readSync(8);
+        expect(bitstream.offset === 8);
+        bitstream.readSync(8);
+        expect(bitstream.offset === 16);
+        bitstream.readSync(8);
+        expect(bitstream.offset === 24);
+    });
+    it('bufferIndex grows when retainBuffers=true', () => {
+        let bitstream = new BitstreamReader();
+        bitstream.retainBuffers = true;
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123, 123 ]));
+        bitstream.addBuffer(Buffer.from([ 123 ]));
+
+        expect(bitstream.bufferIndex === 0);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex === 1);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex === 1);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex === 2);
+    });
     it('can correctly deserialize a simple example from a single buffer', () => {
         let bitstream = new BitstreamReader();
 

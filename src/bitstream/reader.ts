@@ -60,20 +60,28 @@ export class BitstreamReader {
             );
         }
 
-        value -= this._spentBufferSize;
+        let offsetIntoBuffer = value - this._spentBufferSize;
         let bufferIndex = 0;
         
-        for (let buf of this.buffers) {
+        for (let i = 0, max = this.buffers.length; i < max; ++i) {
+            let buf = this.buffers[i];
             let size = buf.length * 8;
-            if (value < size) {
+            if (offsetIntoBuffer < size) {
                 this._bufferIndex = bufferIndex;
                 this._offset = value;
+                this._offsetIntoBuffer = offsetIntoBuffer;
+                this.bufferedLength = buf.length * 8 - this._offsetIntoBuffer;
+                for (let j = i; j < max; ++j)
+                    this.bufferedLength += this.buffers[j].length * 8;
+
                 return;
             }
 
-            value -= size;
+            offsetIntoBuffer -= size;
             ++bufferIndex;
         }
+
+        throw new Error(`Should not be reached`);
     }
 
     /**
