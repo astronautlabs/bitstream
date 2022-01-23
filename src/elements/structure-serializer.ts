@@ -8,7 +8,7 @@ import { BitstreamReader, BitstreamWriter } from "../bitstream";
  */
 export class StructureSerializer implements Serializer {
     *read(reader : BitstreamReader, type : typeof BitstreamElement, parent : BitstreamElement, field : FieldDefinition) {
-        let g = type.read(reader, parent, field);
+        let g = type.read(reader, { parent, field });
         while (true) {
             let result = g.next();
             if (result.done === false)

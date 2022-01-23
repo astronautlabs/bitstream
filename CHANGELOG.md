@@ -3,9 +3,13 @@
 Features:
 - Ability to read/write IEEE 754 floating point 
 - Ability to read/write signed (two's complement) integers
+- Added support for lifecycle operations on elements
+- Elements and all nested sub-elements now have a shared "context" object for elements during (de)serialization
+- Documentation improvements
 
 Breaking changes:
 - Removed the `BitstreamReader.unread()` method which has been deprecated since `v1.0.1` released March 28, 2021.
+- The `BitstreamElement.read()` family of operations now accepts an options bag instead of positional parameters
 
 # v2.1.1
 - Fix: `@ReservedLow` should actually emit low bits 

@@ -12,47 +12,6 @@ that end it includes both imperative and declarative mechanisms for doing so.
 
 `npm install @astronautlabs/bitstream`
 
-# Performance
-
-When reading data from BitstreamReader, you have two options: use the synchronous methods which will throw if not enough data is available, or the asynchronous methods which will wait for the data to arrive before completing the read operation. If you know you have enough data to complete the operation, you can read synchronously to avoid the overhead of creating and awaiting a Promise. If your application is less performance intensive you can instead receive a Promise for when the data becomes available (which happens by a `addBuffer()` call). This allows you to create a pseudo-blocking control flow similar to what is done in lower level languages like C/C++. However using promises in this manner can cause a huge reduction in performance while reading data. You should only use the async API when performance requirements are relaxed. 
-
-When reading data into a **declarative BitstreamElement** class however, ECMAscript generators are used to control whether the library needs to wait for more data. When reading a BitstreamElement using the Promise-based API you are only incurring the overhead of the Promise API once for the initial call, and once each time there is not enough data available in the underlying BitstreamReader, which will only happen if the raw data is not arriving fast enough. In that case, though the Promise will have the typical overhead, it will not impact throughput because the IO wait time will be larger than the time necessary to handle the Promise overhead. We believe that this effectively eliminates the overhead of using an async/await pattern with reasonably sized BitstreamElements, so we encourage you start there and optimize only if you run into throughput / CPU / memory bottlenecks.
-
-With generators at the core of BitstreamElement, implementing high throughput applications such as audio and video processing are quite viable with this library. You are more likely to run into a bottleneck with Javascript or Node.js itself than to be bottlenecked by using declarative BitstreamElement classes, of course your mileage may vary! If you believe BitstreamElement is a performance bottleneck for you, please file an issue!
-
-## So is it faster to "hand roll" using BitstreamReader instead of using BitstreamElements?
-
-Absolutely not. You should use BitstreamElement whereever possible, because it is using generators as the core mechanism for handling bitstream exhaustion events. Using generators internally instead of promises is _dramatically_ faster. To see this, compare the performance of @astronautlabs/bitstream@1 with @astronautlabs/bitstream@2. Using generators in the core was introduced in v2.0.0, prior to that a Promise was issued for every individual read call.
-
-How many times can each version of the library read the following BitstreamElement structure within a specified period of time?
-
-```typescript
-class SampleItem extends BitstreamElement {
-    @Field(1) b1 : number;
-    @Field(1) b2 : number;
-    @Field(1) b3 : number;
-    @Field(1) b4 : number;
-    @Field(1) b5 : number;
-    @Field(1) b6 : number;
-    @Field(1) b7 : number;
-    @Field(1) b8 : number;
-}
-
-class SampleContainer extends BitstreamElement {
-    @Field(0, { array: { type: SampleItem, countFieldLength: 32 }})
-    items : SampleItem[];
-}
-```
-
-The results are night and day:
-> **Iteration count while parsing a 103-byte buffer in 500ms** (_Intel Core i7 6700_)
-> - @astronautlabs/bitstream@1.1.0: Read the buffer 104 times
-> - @astronautlabs/bitstream@2.0.2: Read the buffer 1,163,576 times
-
-While we're proud of the performance improvement, it really just shows the overhead of Promises and how that architecture was the wrong choice for BitstreamElements in V1. 
-
-Similarly, we tried giving a 1GB buffer to each version with the above test -- V2 was able to parse the entire buffer in less than a millisecond, whereas V1 effectively _did not complete_ -- it takes _minutes_ to parse such a Buffer with V1 even once, and quite frankly we gave up waiting for it to complete.
-
 # Reading bitstreams
 
 ```typescript
@@ -82,7 +41,7 @@ were in the bitstream:
 await reader.readString(10, { nullTerminated: false });
 ```
 
-By default the text is read as UTF-8. You can read a string using any text encoding supported by Node.js' Buffer class:
+By default the text is read as UTF-8. You can read a string using any text encoding supported by the platform you are on. For Node.js these are the encodings supported by `Buffer`. On the web, only `utf-8` is available (see documentation for `TextEncoder`/`TextDecoder`).
 
 ```typescript
 await reader.readString(10, { encoding: 'utf16le' })
@@ -101,7 +60,7 @@ enough data is available to complete the operation.
 
 When using `readSync()`, there must be enough bytes available to the reader (via `addBuffer()`) to read the desired 
 number of bits. If this is not the case, `readSync()` throws an error. You can check how many bits are available using 
-the `available()` method:
+the `isAvailable()` method:
 
 ```typescript
 if (reader.isAvailable(10)) {
@@ -134,9 +93,15 @@ writer.write(10, 0b1010101010);
 writer.write(length, value);
 ```
 
-`writableStream` is an object which has a `write(buffer)` method (such as a Node.js `Writable` from the `stream` builtin package).
+`writableStream` can be any object which has a `write(chunk : Uint8Array)` method (see exported `Writable` interface). 
+
+Examples of writables you can use include:
+- Node.js' writable streams (`Writable` from the `stream` package)
+- `WritableStreamDefaultWriter` from the WHATWG Streams specification in the browser
+- Any custom object which implements the `Writer` interface
+
 The `bufferLength` parameter determines how many bytes will be buffered before the buffer will be flushed out to the 
-passed writable stream. This parameter is optional, the default is `1` (one byte per buffer).
+passed writable stream. This parameter is optional, the default (and minimum value) is `1` (one byte per buffer).
 
 Note that any bits in `value` above the `length`'th bit will be ignored, so the following are all equivalent:
 
@@ -147,6 +112,7 @@ writer.write(2, 0b1111101); // 0b01 will be written
 ```
 
 # Declarative (Elements)
+Efficient structural (de)serialization can be achieved by building subclasses of the `BitstreamElement` class.
 
 ## Deserialization (Reading)
 
@@ -176,7 +142,17 @@ Or, deserialize from a Buffer using:
 let element = await MyElement.deserialize(buffer);
 ```
 
-If you specify type `boolean` for a field, the integer values `0` and `1` will be automatically converted to `false` and `true` respectively (and vice versa, when writing to a bitstream).
+### Numbers
+
+- Numbers are treated as big-endian unsigned integers by default
+- Any decimal portions of numbers is truncated. 
+- `null` and `undefined` are written as `0` during serialization
+- An error is thrown when trying to serialize `NaN` or infinite values
+- 
+
+### Boolean
+
+If you specify type `boolean` for a field, the integer value `0` will be deserialized to `false` and all other values will be deserialized as `true`. When booleans are serialized, `0` is used for `false` and `1` is used for true.
 
 ### Strings
 
@@ -193,6 +169,8 @@ If you wish to control the encoding options, use the `string` options group:
     @Field(5, { string: { encoding: 'ascii', nullTerminated: false } }) 
     stringField : string;
 ```
+
+For information about the available encodings, see "Reading Strings" above.
 
 ### Buffers
 
@@ -275,7 +253,7 @@ class ItemElement extends BitstreamElement {
 
 In the above, if `length` is read as `30`, then the `value` field is read/written as 30 bits long.
 
-### Variants
+### Variation
 
 Many bitstream formats have the concept of _specialization_. BitstreamElement represents this using the "Variant" system. Any BitstreamElement class may have zero or more "Variant" classes which are automatically substituted for the class which is being read.
 
@@ -297,9 +275,13 @@ class Type2Element extends BaseElement {
 
 When reading an instance of `BaseElement` the library automatically checks the _discriminants_ specified on the defined Variant classes to determine the appropriate subclass to substitute. In the case above, if `type` is read as `0x2` when performing `await BaseElement.read(reader)`, then the result will be an instance of `Type2Element`.
 
-### Variation Sandwich
+Note that variation which occurs at _the end_ of a bitstream element is referred to as "tail variation".
 
-Sometimes a bitstream format specifies that the specialized fields fall somewhere in the middle of the overall structure, with the fields of the base class falling both before and after those found in the subclass. `BitstreamElement` can accomodate this using `@VariantMarker()`:
+### Marked Variation
+
+Sometimes a bitstream format specifies that the specialized fields fall somewhere in the middle of the overall structure, with the fields of the base class falling both before and after those found in the subclass. This is called "marked variation".
+
+`BitstreamElement` can accomodate this using `@VariantMarker()`:
 
 ```typescript
 class BaseElement extends BitstreamElement {
@@ -403,19 +385,21 @@ In the case above the type of the determinant is carried through into the `measu
 
 ### Reserved fields
 
-There is also `@Reserved(length)` which can be used in place of `@Field(length)`. This decorator marks a field as taking up space in the bitstream, but ignores the value in the object instance when reading/writing. Instead the value is always high bits. That is, a field marked with `@Reserved(8)` will always be written as `0xFF` (`0b11111111`). This can be useful for standards which specify that reserved space should be filled with high bits. Other schemes can be accomodated with custom decorators like this one:
+There is also `@Reserved(length)` which can be used in place of `@Field(length)`. This decorator marks a field as taking up space in the bitstream, but ignores the value in the object instance when reading/writing. Instead the value is always high bits. That is, a field marked with `@Reserved(8)` will always be written as `0xFF` (`0b11111111`). This can be useful for standards which specify that reserved space should be filled with high bits. `@LowReserved()` is also provided which will do the opposite- filling the covered bits with all zeroes. 
+
+Other schemes can be accomodated with custom decorators. For instance:
 
 ```typescript
-function LowReserved(length : LengthDeterminant) {
-    return Field(length, { ignored: true, writtenValue: () => 0 });
+function RandomReserved(length : LengthDeterminant) {
+    return Field(length, { ignored: true, writtenValue: () => Math.floor(Math.random() * 2**length) });
 }
 ```
 
-The above function can be used as a decorator to specify that the values read/written should be ignored (and not read/written to the object), and that whenever writing the value it should be _low_ bits. It could be used like so:
+The above function can be used as a decorator to specify that the values read/written should be ignored (and not read/written to the object), and when writing the value to a bitstream it should be populated with a random value. It could be used like so:
 
 ```typescript
 class MyElement extends BitstreamElement {
-    @LowReserved() reserved : number;
+    @RandomReserved() reserved : number;
 }
 ```
 
@@ -463,6 +447,47 @@ secondElement.deserializeFrom(bitstreamReader, firstElement);
 Here, we are passing a previously decoded element into the `deserializeFrom()` of the element 
 being deserialized. You could pass any arbitrary data in this fashion, giving you flexibility 
 in how you handle advanced serialization.
+
+# Performance
+
+When reading data from BitstreamReader, you have two options: use the synchronous methods which will throw if not enough data is available, or the asynchronous methods which will wait for the data to arrive before completing the read operation. If you know you have enough data to complete the operation, you can read synchronously to avoid the overhead of creating and awaiting a Promise. If your application is less performance intensive you can instead receive a Promise for when the data becomes available (which happens by a `addBuffer()` call). This allows you to create a pseudo-blocking control flow similar to what is done in lower level languages like C/C++. However using promises in this manner can cause a huge reduction in performance while reading data. You should only use the async API when performance requirements are relaxed. 
+
+When reading data into a **declarative BitstreamElement** class however, ECMAscript generators are used to control whether the library needs to wait for more data. When reading a BitstreamElement using the Promise-based API you are only incurring the overhead of the Promise API once for the initial call, and once each time there is not enough data available in the underlying BitstreamReader, which will only happen if the raw data is not arriving fast enough. In that case, though the Promise will have the typical overhead, it will not impact throughput because the IO wait time will be larger than the time necessary to handle the Promise overhead. We believe that this effectively eliminates the overhead of using an async/await pattern with reasonably sized BitstreamElements, so we encourage you start there and optimize only if you run into throughput / CPU / memory bottlenecks.
+
+With generators at the core of BitstreamElement, implementing high throughput applications such as audio and video processing are quite viable with this library. You are more likely to run into a bottleneck with Javascript or Node.js itself than to be bottlenecked by using declarative BitstreamElement classes, of course your mileage may vary! If you believe BitstreamElement is a performance bottleneck for you, please file an issue!
+
+## So is it faster to "hand roll" using BitstreamReader instead of using BitstreamElements?
+
+Absolutely not. You should use BitstreamElement whereever possible, because it is using generators as the core mechanism for handling bitstream exhaustion events. Using generators internally instead of promises is _dramatically_ faster. To see this, compare the performance of @astronautlabs/bitstream@1 with @astronautlabs/bitstream@2. Using generators in the core was introduced in v2.0.0, prior to that a Promise was issued for every individual read call.
+
+How many times can each version of the library read the following BitstreamElement structure within a specified period of time?
+
+```typescript
+class SampleItem extends BitstreamElement {
+    @Field(1) b1 : number;
+    @Field(1) b2 : number;
+    @Field(1) b3 : number;
+    @Field(1) b4 : number;
+    @Field(1) b5 : number;
+    @Field(1) b6 : number;
+    @Field(1) b7 : number;
+    @Field(1) b8 : number;
+}
+
+class SampleContainer extends BitstreamElement {
+    @Field(0, { array: { type: SampleItem, countFieldLength: 32 }})
+    items : SampleItem[];
+}
+```
+
+The results are night and day:
+> **Iteration count while parsing a 103-byte buffer in 500ms** (_Intel Core i7 6700_)
+> - @astronautlabs/bitstream@1.1.0: Read the buffer 104 times
+> - @astronautlabs/bitstream@2.0.2: Read the buffer 1,163,576 times
+
+While we're proud of the performance improvement, it really just shows the overhead of Promises and how that architecture was the wrong choice for BitstreamElements in V1. 
+
+Similarly, we tried giving a 1GB buffer to each version with the above test -- V2 was able to parse the entire buffer in less than a millisecond, whereas V1 effectively _did not complete_ -- it takes _minutes_ to parse such a Buffer with V1 even once, and quite frankly we gave up waiting for it to complete.
 
 # Debugging Element Serialization
 

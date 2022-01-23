@@ -27,12 +27,18 @@ export interface SerializeOptions {
      * Set of fields to skip while writing
      */
     skip? : (string | symbol)[];
+    context? : any;
 }
 
 export interface ReadOptions<T = BitstreamElement> extends SerializeOptions {
     parent? : BitstreamElement;
     field? : FieldDefinition;
     variator? : () => Promise<T>;
+}
+
+export interface TypeReadOptions<T = BitstreamElement> extends ReadOptions<T> {
+    elementBeingVariated? : BitstreamElement;
+    params? : any[];
 }
 
 /**
@@ -53,6 +59,62 @@ export class BitstreamElement {
         this.generateReader();
         return this._generatedReader;
     }
+
+    /**
+     * When serializing/deserializing a BitstreamElement, this contains an anonymous object that is shared by the 
+     * top-level element and all sub-elements that are involved in the operation. The object is set to this property
+     * at the earliest possible moment- for serialization this is just prior to the onSerializeStarted() event, 
+     * for deserialization this is just after the instance is created.
+     */
+    context : any;
+
+    // Lifecycle events
+
+    /**
+     * Called when this object is created as part of an element parsing operation.
+     * - For unvariated elements this is called before parsing begins.
+     * - For variated elements this is called before the original element's fields are copied into this instance.
+     *   The instance being variated is passed as 'variatingFrom' in this case.
+     * 
+     * In either case, no fields have been populated within the instance before the lifecycle event is invoked.
+     * To observe the values copied in when this object is the result of variation, see onVariationFrom().
+     */
+    onParseStarted(variatingFrom? : BitstreamElement) { }
+
+    /**
+     * Called when this object has completed parsing including all variation operations.
+     * 
+     * Note that onParseFinished() may not be invoked if the bitstream is exhausted before
+     * parsing is finished or if this instance is replaced via variation. To observe this process, use 
+     * onVariationTo/onVariationFrom. The final variation is the only one that has onParseFinished() invoked.
+     */
+    onParseFinished() { }
+
+    /**
+     * Called when this object is undergoing variation. The 'replacement' parameter contains the newly variated 
+     * object. No further lifecycle events will occur for this instance, and all future lifecycle events occur on 
+     * the replacement object.
+     * 
+     * @param replacement 
+     */
+    onVariationTo(replacement : BitstreamElement) { }
+
+    /**
+     * Called when this object is the result of a variation operation. The 'source' parameter contains the original
+     * object. At this point all fields of the variation source have been copied into the new variant object.
+     * @param source 
+     */
+    onVariationFrom(source : BitstreamElement) { }
+
+    /**
+     * Called when this object is about to be serialized to a BitstreamWriter.
+     */
+    onSerializeStarted() { }
+
+    /**
+     * Called when this object has been completely serialized to a BitstreamWriter.
+     */
+    onSerializeFinished() { }
 
     /**
      * Retrieve the "syntax" of this element, which is the list of fields defined on the element 
@@ -539,6 +601,11 @@ export class BitstreamElement {
                 if (options?.skip && options.skip.includes(element.name))
                     continue;
 
+                // If this is a @VariantMarker(), perform marker variation.
+                // This is one of two ways variation can occur- the other being 
+                // "tail variation" which happens after all fields of this type are parsed
+                // and none of them are marked with @VariantMarker().
+
                 if (element.options.isVariantMarker) {
                     if (globalThis.BITSTREAM_TRACE)
                         console.log(`Variating at marker...`);
@@ -720,10 +787,20 @@ export class BitstreamElement {
         }
     }
 
-    *variate(reader : BitstreamReader, parent? : BitstreamElement, defn? : FieldDefinition): Generator<number, this> {
-        let variantType : typeof BitstreamElement = this.determineVariantType(parent, defn?.options.variants);
+    /**
+     * Apply variation rules to this element. If one is found, the new variated instance is returned, otherwise 
+     * the current instance is returned.
+     * 
+     * @param reader The reader to read from
+     * @param parent The parent element of this element
+     * @param field The Bitstream field that this element is being parsed for when this is a subelement of a larger 
+     *     parse operation.
+     * @returns 
+     */
+    *variate(reader : BitstreamReader, parent? : BitstreamElement, field? : FieldDefinition): Generator<number, this> {
+        let variantType : typeof BitstreamElement = this.determineVariantType(parent, field?.options.variants);
         if (variantType) {
-            let g = variantType.read(reader, parent, defn, this);
+            let g = variantType.read(reader, { parent, field, elementBeingVariated: this, context: this.context });
             do {
                 let result = g.next();
                 if (result.done === false)
@@ -747,11 +824,9 @@ export class BitstreamElement {
     static async readBlocking<T extends typeof BitstreamElement>(
         this : T, 
         reader : BitstreamReader, 
-        parent? : BitstreamElement, 
-        defn? : FieldDefinition,
-        params : any[] = []
+        options : TypeReadOptions = {}
     ) : Promise<InstanceType<T>> {
-        let iterator = <Generator<number, InstanceType<T>>> this.read(reader, parent, defn, undefined, params);
+        let iterator = <Generator<number, InstanceType<T>>> this.read(reader, options);
         do {
             let result = iterator.next();
             if (result.done === false) {
@@ -770,10 +845,10 @@ export class BitstreamElement {
      * @param data 
      * @returns 
      */
-    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array, params : any[] = []): Promise<InstanceType<T>> {
+    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array, options : TypeReadOptions = {}): Promise<InstanceType<T>> {
         let reader = new BitstreamReader();
         reader.addBuffer(data);
-        let gen = this.read(reader, undefined, undefined, undefined, params);
+        let gen = this.read(reader, options);
         while (true) {
             let result = gen.next();
             if (result.done === false)
@@ -789,7 +864,9 @@ export class BitstreamElement {
      * @param options Options which modify how the element is written. Most notably this lets you skip specific fields
      */
     write(bitstream : BitstreamWriter, options? : SerializeOptions) {
+        this.onSerializeStarted();
         this.writeGroup(bitstream, '*', options);
+        this.onSerializeFinished();
     }
 
     /**
@@ -825,7 +902,6 @@ export class BitstreamElement {
      * Try to read the bitstream using the given generator function synchronously, if there are not enough bits, abort 
      * and return undefined.
      * @param reader The reader to read from
-     * @param generator The generator that implements the read operation
      * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
      */
     static tryRead<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, parent? : BitstreamElement): InstanceType<T> {
@@ -862,31 +938,35 @@ export class BitstreamElement {
      *      retainBuffers requires you to manage the saved buffers manually (see BitstreamReader.clean()).
      */
     static *read<T extends typeof BitstreamElement>(
-         this : T, 
-         reader : BitstreamReader,
-         parent? : BitstreamElement,
-         defn? : FieldDefinition,
-         elementBeingVariated? : BitstreamElement,
-         params : any[] = []
+        this : T, 
+        reader : BitstreamReader,
+        options : TypeReadOptions = {}
     ): Generator<number, InstanceType<T>> {
-        let element = new (this as any)(...params);
-        element.parent = parent;
-        let parentStillReading = elementBeingVariated ? elementBeingVariated.isBeingRead : false;
+        options.context ??= {};
+        let element : BitstreamElement = new (this as any)(...(options.params ?? []));
+        element.context = options.context;
+        element.onParseStarted(options.elementBeingVariated);
+
+        element.parent = options.parent;
+        let parentStillReading = options.elementBeingVariated?.isBeingRead ?? false;
         element.isBeingRead = true;
 
-        if (elementBeingVariated) {
+        if (options.elementBeingVariated) {
             element.syntax.forEach(f => {
-                if (defn?.options?.skip && defn.options.skip.includes(f.name))
+                if (options.field?.options?.skip && options.field.options.skip.includes(f.name))
                     return;
 
-                if (elementBeingVariated.syntax.some(x => x.name === f.name) && elementBeingVariated.readFields.includes(f.name)) {
+                if (options.elementBeingVariated.syntax.some(x => x.name === f.name) && options.elementBeingVariated.readFields.includes(f.name)) {
                     if (!f.options.isIgnored)
-                        element[f.name] = elementBeingVariated[f.name];
+                        element[f.name] = options.elementBeingVariated[f.name];
                     element.readFields.push(f.name);
                 }
             });
 
-            let g = element.readOwn(reader, { skip: defn?.options?.skip });
+            options.elementBeingVariated.onVariationTo(element);
+            element.onVariationFrom(options.elementBeingVariated);
+
+            let g = element.readOwn(reader, { skip: options.field?.options?.skip });
             while (true) {
                 let result = g.next();
                 if (result.done === false) {
@@ -897,7 +977,7 @@ export class BitstreamElement {
                 }
             }
         } else {
-            let g = element.read(reader, { skip: defn?.options?.skip });
+            let g = element.read(reader, { skip: options.field?.options?.skip });
             while (true) {
                 let result = g.next();
                 if (result.done === false) {
@@ -911,8 +991,10 @@ export class BitstreamElement {
 
         element.isBeingRead = parentStillReading;
 
+        // Perform tail variation: Only used when there is no @VariantMarker() within the element.
+        // For marker variation, see readGroup()'s use of variate()
         if (!element.ownSyntax.some(x => x.options.isVariantMarker)) {
-            let g = element.variate(reader, parent, defn);
+            let g = element.variate(reader, options.parent, options.field);
             while (true) {
                 let result = g.next();
                 if (result.done === false) {
@@ -924,6 +1006,7 @@ export class BitstreamElement {
             }
         }
         
+        element.onParseFinished();
         return <InstanceType<T>> element;
     }
 
