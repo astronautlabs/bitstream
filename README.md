@@ -46,7 +46,7 @@ await reader.read(4); // == 0b0001
 await reader.read(7); // == 0b0001111
 ```
 
-The above will write the values as unsigned integers in big-endian (network byte order) format.
+The above will read the values as unsigned integers in big-endian (network byte order) format.
 
 ## Asynchronous versus Synchronous
 
