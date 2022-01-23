@@ -3,11 +3,13 @@
   "version": "2.1.2",
   "description": "Utilities for packing/unpacking fields of a bitstream",
   "main": "dist/index.js",
+  "module": "dist.esm/index.js",
   "types": "dist/index.d.ts",
   "private": false,
+  "keywords": [ "bitstream", "serialization", "parsing", "binary", "protocol", "network", "syntax" ],
   "scripts": {
-    "clean": "rimraf dist",
-    "build": "npm run clean && tsc -b",
+    "clean": "rimraf dist dist.esm",
+    "build": "npm run clean && tsc -b && tsc -b tsconfig.esm.json",
     "test": "npm run build && node dist/test",
     "benchmark": "npm run build && node dist/benchmark",
     "prepublishOnly": "npm test"
