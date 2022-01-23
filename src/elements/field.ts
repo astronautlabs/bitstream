@@ -23,10 +23,6 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
     return (target : any, fieldName : string | symbol) => {
         let containingType = target.constructor;
 
-        if (!(containingType as Object).hasOwnProperty('ownSyntax')) {
-            containingType.ownSyntax = [];
-        }
-
         let field : FieldDefinition = { 
             name: fieldName, 
             containingType,

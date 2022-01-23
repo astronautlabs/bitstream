@@ -123,7 +123,7 @@ export class BitstreamElement {
     static get syntax() : FieldDefinition[] {
         let parentSyntax = (<FieldDefinition[]>(Object.getPrototypeOf(this).syntax || []));
         let syntax = parentSyntax.slice();
-        let ownSyntax = (<Object>this).hasOwnProperty('ownSyntax') ? this.ownSyntax : [];
+        let ownSyntax = this.ownSyntax;
         let insertIndex = syntax.findIndex(x => x.options.isVariantMarker);
 
         if (insertIndex >= 0)
@@ -399,7 +399,23 @@ export class BitstreamElement {
      * Retrieve the syntax defined for this specific class, excluding the syntax
      * defined by its superclasses
      */
-    static ownSyntax : FieldDefinition[];
+    static get ownSyntax() : FieldDefinition[] {
+        let obj : Object = this;
+        if (!obj.hasOwnProperty('$ownSyntax')) {
+            Object.defineProperty(obj, '$ownSyntax', {
+                writable: true,
+                value: [],
+                enumerable: false
+            });
+        }
+
+        return obj['$ownSyntax'];
+    }
+
+    static set ownSyntax(value) {
+        this.ownSyntax.length; // causes property to be created
+        this['$ownSyntax'] = value;
+    }
 
     #parent : BitstreamElement;
 
@@ -845,7 +861,7 @@ export class BitstreamElement {
      * @param data 
      * @returns 
      */
-    static async deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array, options : TypeReadOptions = {}): Promise<InstanceType<T>> {
+    static deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array, options : TypeReadOptions = {}): InstanceType<T> {
         let reader = new BitstreamReader();
         reader.addBuffer(data);
         let gen = this.read(reader, options);
@@ -1006,7 +1022,8 @@ export class BitstreamElement {
             }
         }
         
-        element.onParseFinished();
+        if (!options?.elementBeingVariated)
+            element.onParseFinished();
         return <InstanceType<T>> element;
     }
 

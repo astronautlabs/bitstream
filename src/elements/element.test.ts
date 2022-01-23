@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { describe } from "razmin";
+import { Variant } from "./variant";
 import { BitstreamReader } from "../bitstream";
 import { BitstreamElement } from "./element";
 import { Field } from "./field";
@@ -310,5 +311,170 @@ describe('BitstreamElement', it => {
         }
 
         expect(caught).to.exist;
+    });
+    it('should call onParseStarted when parsing begins', () => {
+        let called = 0;
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() {
+                called += 1;
+            }
+
+            @Field(8) byte;
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(called).to.equal(1);
+    });
+    it('should call onParseFinished when parsing is completed', () => {
+        let called = 0;
+
+        class CustomElement extends BitstreamElement {
+            onParseFinished() { called += 1; }
+
+            @Field(8) byte;
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(called).to.equal(1);
+    });
+    it('ownSyntax should be an empty array on a child element with no syntax of its own', () => {
+        class CustomElement extends BitstreamElement { @Field(8) byte; }
+        class CustomElement2 extends CustomElement { }
+        expect(CustomElement2.ownSyntax).to.eql([]);
+    })
+    it('ownSyntax should not contain syntax from parent class', () => {
+        class CustomElement extends BitstreamElement { @Field(8) byte; }
+        class CustomElement2 extends CustomElement { @Field(8) byte2; }
+        expect(CustomElement2.ownSyntax.length).to.eql(1);
+        expect(CustomElement2.ownSyntax[0].name).to.eql('byte2');
+    })
+    it('ownSyntax should not contain syntax from child class', () => {
+        class CustomElement extends BitstreamElement { @Field(8) byte; }
+        class CustomElement2 extends CustomElement { @Field(8) byte2; }
+        expect(CustomElement.ownSyntax.length).to.eql(1);
+        expect(CustomElement.ownSyntax[0].name).to.eql('byte');
+    })
+    it('should call onParseFinished on variant after variation', () => {
+        let called = 0;
+
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte;
+        }
+
+        @Variant(i => true)
+        class CustomElement2 extends CustomElement {
+            onParseFinished() { called += 1; }
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(called).to.equal(1);
+    });
+    it('should not call onParseFinished on original after variation', () => {
+        let called = 0;
+        let subCalled = 0;
+
+        class CustomElement extends BitstreamElement {
+            onParseFinished() { called += 1; }
+
+            @Field(8) byte : number;
+        }
+
+        @Variant(i => true)
+        class CustomElement2 extends CustomElement {
+            onParseFinished() { subCalled += 1; }
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(called).to.equal(0);
+        expect(subCalled).to.equal(1);
+    });
+    it('should call onParseStarted on both original and variant during variation', () => {
+        let called = 0;
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() { called += 1; }
+
+            @Field(8) byte;
+        }
+
+        @Variant(i => true)
+        class CustomElement2 extends CustomElement {
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(called).to.equal(2);
+    });
+    it('should call onVariationTo on original, but not the variant', () => {
+        let called = 0;
+
+        class CustomElement extends BitstreamElement {
+            onVariationTo() { called += 1; }
+
+            @Field(8) byte;
+        }
+
+        @Variant(i => true)
+        class CustomElement2 extends CustomElement {
+            onVariationTo() { throw new Error("Should not be called"); }
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(called).to.equal(1);
+    });
+    it('should call onVariationFrom on variant, but not the original', () => {
+        let called = 0;
+
+        class CustomElement extends BitstreamElement {
+            onVariationFrom() { throw new Error("Should not be called"); }
+
+            @Field(8) byte;
+        }
+
+        @Variant(i => true)
+        class CustomElement2 extends CustomElement {
+            onVariationFrom() { called += 1; }
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(called).to.equal(1);
+    });
+    it('should pass the original to the variant during onVariationFrom', () => {
+        let passed;
+
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte;
+
+            whoAmI() { return 'original'; }
+        }
+
+        @Variant(i => true)
+        class CustomElement2 extends CustomElement {
+
+            whoAmI() { return 'variant'; }
+            onVariationFrom(original) { passed = original; }
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(passed.whoAmI()).to.equal('original');
+    });
+    it('should pass the variant to the original during onVariationTo', () => {
+        let passed;
+
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte;
+
+            whoAmI() { return 'original'; }
+            onVariationTo(variant) { passed = variant; }
+        }
+
+        @Variant(i => true)
+        class CustomElement2 extends CustomElement {
+
+            whoAmI() { return 'variant'; }
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(passed.whoAmI()).to.equal('variant');
     });
 })
