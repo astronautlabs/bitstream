@@ -6,6 +6,7 @@ import { Serializer } from "./serializer";
 import { ValueDeterminant } from "./value-determinant";
 import { VariantDefinition } from "./variant-definition";
 import { NumberOptions } from "./number-options";
+import { BooleanOptions } from "./boolean-options";
 
 /**
  * Defines options available for properties marked with `@Field()` within BitstreamElement classes.
@@ -28,6 +29,11 @@ export interface FieldOptions {
      * Specify options specific to number fields
      */
     number? : NumberOptions;
+
+    /**
+     * Specify options specific to boolean fields
+     */
+    boolean? : BooleanOptions;
 
     /**
      * Specify options specific to array fields, such as how the length of the array should be 

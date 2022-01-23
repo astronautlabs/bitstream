@@ -50,7 +50,7 @@ export class BitstreamWriter {
      * @param encoding The encoding to use when writing the string. Defaults to utf-8
      */
     writeString(byteCount : number, value : string, encoding : string = 'utf-8') {
-        if (encoding === 'utf-8') {    
+        if (encoding === 'utf-8') {
             let buffer = new Uint8Array(byteCount);
             let strBuf = this.textEncoder.encode(value);
             buffer.set(strBuf, 0);
@@ -91,9 +91,14 @@ export class BitstreamWriter {
      * @param value The number to write
      */
     write(length : number, value : number) {
-        if (isNaN(value))
-            throw new Error(`Cannot write to bitstream: Value ${value} is not a number`);
+        if (value === void 0 || value === null)
+            value = 0;
         
+        if (Number.isNaN(value))
+            throw new Error(`Cannot write to bitstream: Value ${value} is not a number`);
+        if (!Number.isFinite(value))
+            throw new Error(`Cannot write to bitstream: Value ${value} must be finite`);
+
         let valueN = BigInt(value % Math.pow(2, length));
         
         let remainingLength = length;
@@ -120,6 +125,11 @@ export class BitstreamWriter {
     }
 
     writeSigned(length : number, value : number) {
+        if (Number.isNaN(value))
+            throw new Error(`Cannot write to bitstream: Value ${value} is not a number`);
+        if (!Number.isFinite(value))
+            throw new Error(`Cannot write to bitstream: Value ${value} must be finite`);
+
         const max = 2**(length - 1) - 1; // ie 127
         const min = -(2**(length - 1)); // ie -128
         const originalValue = value;

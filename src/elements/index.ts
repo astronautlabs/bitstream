@@ -1,5 +1,6 @@
 export * from './array-options';
 export * from './array-serializer';
+export * from './boolean-options';
 export * from './boolean-serializer';
 export * from './buffer-options';
 export * from './buffer-serializer';

@@ -13,11 +13,11 @@ export class ArraySerializer implements Serializer {
         let count = 0;
         let elements = [];
 
-        if (field.options.array.countFieldLength) {
+        if (field?.options?.array?.countFieldLength) {
             if (!reader.isAvailable(field.options.array.countFieldLength))
                 yield field.options.array.countFieldLength;
             count = reader.readSync(field.options.array.countFieldLength);
-        } else if (field.options.array.count) {
+        } else if (field?.options?.array?.count) {
             count = resolveLength(field.options.array.count, parent, field);
         }
 
@@ -26,12 +26,24 @@ export class ArraySerializer implements Serializer {
             parent[field.name] = [];
         }
 
-        if (field.options.array.type === Number) {
+        if (field?.options?.array?.type === Number) {
             // Array of numbers. Useful when the array holds a single number field, but the 
             // bit length of the element fields is not 8 (where you would probably use a single `Buffer` field instead).
             // For instance, in somes IETF RFCs 10 bit words are used instead of 8 bit words (ie bytes).
+            let elementLength = field.options.array.elementLength;
+            let format = field?.options?.number?.format ?? 'unsigned';
+            let readNumber = () => {
+                if (format === 'signed')
+                    elements.push(reader.readSignedSync(elementLength));
+                else if (format === 'float')
+                    elements.push(reader.readFloatSync(elementLength));
+                else if (format === 'unsigned')
+                    elements.push(reader.readSync(elementLength));
+                else
+                    throw new Error(`Unsupported number format '${format}'`);
+            };
 
-            if (field.options.array.hasMore) {
+            if (field?.options?.array?.hasMore) {
                     do {
                         let continued : boolean;
                         
@@ -45,20 +57,18 @@ export class ArraySerializer implements Serializer {
                         if (!continued)
                             break;
 
-                        let elementLength = field.options.array.elementLength;
 
                         if (!reader.isAvailable(elementLength))
                             yield elementLength;
                         
-                        elements.push(reader.readSync(elementLength));
+                        readNumber();
                     } while (true);
             } else {
                 for (let i = 0; i < count; ++i) {
-                    let elementLength = field.options.array.elementLength;
                     if (!reader.isAvailable(elementLength))
                         yield elementLength;
-
-                    elements.push(reader.readSync(elementLength));
+                    
+                    readNumber();
                 }
             }
         } else {

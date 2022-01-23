@@ -13,10 +13,33 @@ export class BooleanSerializer implements Serializer {
         if (!reader.isAvailable(length))
             yield length;
 
-        return reader.readSync(length) !== 0;
+        const numericValue = reader.readSync(length);
+        const trueValue = field?.options?.boolean?.true ?? 1;
+        const falseValue = field?.options?.boolean?.false ?? 0;
+        const mode = field?.options?.boolean?.mode || 'false-unless';
+        
+        if (mode === 'false-unless')
+            return numericValue !== falseValue;
+        else if (mode === 'true-unless')
+            return numericValue === trueValue;
+        else if (mode === 'undefined')
+            return numericValue === trueValue ? true : numericValue === falseValue ? false : undefined;
     }
 
     write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
-        writer.write(resolveLength(field.length, instance, field), value ? 1 : 0);
+        
+        const trueValue = field?.options?.boolean?.true ?? 1;
+        const falseValue = field?.options?.boolean?.false ?? 0;
+        const undefinedValue = field?.options?.boolean?.undefined ?? 0;
+        let numericValue : number;
+
+        if (value === void 0)
+            numericValue = undefinedValue;
+        else if (value)
+            numericValue = trueValue;
+        else
+            numericValue = falseValue;
+        
+        writer.write(resolveLength(field.length, instance, field), numericValue);
     }
 }
