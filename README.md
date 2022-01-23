@@ -109,11 +109,9 @@ you are on. For Node.js these are the encodings supported by `Buffer`. On the we
 await reader.readString(10, { encoding: 'utf16le' })
 ```
 
-**Important**: In cases like above where you are using encodings where a character spans 
-multiple bytes (including UTF-8), the length given to `readString()` is always the _number of 
-bytes_ not the _number of characters_. This is an important distinction. You may inadvertently
-make assumptions that the resulting string's `.length` is the same as the value passed to 
-`.readString()` but this may not be true, even when you've set `nullTerminated: false`.
+> **Important**: In cases like above where you are using encodings where a character spans 
+> multiple bytes (including UTF-8), the length given to `readString()` is always the _number of 
+> bytes_ not the _number of characters_. It is easy to make mistaken assumptions in this regard.
 
 # BitstreamWriter: Writing to bitstreams imperatively
 
@@ -137,8 +135,6 @@ Examples of writables you can use include:
 The `bufferLength` parameter determines how many bytes will be buffered before the buffer will be flushed out to the 
 passed writable stream. This parameter is optional, the default (and minimum value) is `1` (one byte per buffer).
 
-Note that any bits in `value` above the `length`'th bit will be ignored, so the following are all equivalent:
-
 # Writing unsigned integers
 
 ```typescript
@@ -146,6 +142,8 @@ writer.write(2, 0b01);
 writer.write(2, 0b1101);
 writer.write(2, 0b1111101); // 0b01 will be written
 ```
+
+> **Note**: Any bits in `value` above the `length`'th bit will be ignored, so all of the above are equivalent.
 
 # Writing signed integers 
 
@@ -286,23 +284,29 @@ For example, to read 10 8-bit unsigned integers:
 
 ```typescript
 class BufferElement extends BitstreamElement {
-    @Field(10, { array: { elementLength: 8 }})
+    @Field(10, { array: { type: Number, elementLength: 8 }})
     array : number[];
 }
 ```
 
-> **Important:** You must specify `elementLength` in order for the library to know how many bits each 
-> number in the array is in the bitstream. 
+> **Important:** 
+> - You must specify the `array.type` option when using elements. 
+>   Typescript cannot convey the element type via reflection, only that the field is of type `Array`
+>   which is not enough information to deserialize the array.
+> - When using arrays of numbers you must specify the `array.elementLength` option for the library to know how many 
+>   bits each array item represents within the bitstream. For other array item types such as BitstreamElement
+>   the length is already known and `array.elementLength` is ignored
 
-You can read signed integers and floating point values instead of unsigned integers by specifying the `options.number.
-format` option (see Number Fields for more information).
+You can read signed integers and floating point values instead of unsigned integers by specifying the `number.format` 
+option (see Number Fields for more information).
 
 When handling arrays, the length parameter of `@Field()` is used to represent the item count for the array by default. Alternatively (and mainly for historical reasons) you can also set the `options.array.count` property.
 
 #### Derived lengths
 
-As with all fields, you can represent the number of items dynamically with a _discriminant_ allowing the array length to be dependent on any value already read before the field being read. For more information about this, see the section on
-"Dynamic Lengths" below.
+As with all fields, you can represent the number of items dynamically with a determinant fucntion, allowing the array 
+length to be dependent on any value already read before the field being read. For more information about this, see the 
+section on "Dynamic Lengths" below.
 
 You can pair this with the `writtenValue` feature to ensure that the correct length is always written to the bitstream.
 
@@ -327,10 +331,6 @@ class ListElement extends BitstreamElement {
     parts : PartElement[];
 }
 ```
-
-> **Important:** You must specify the `array.type` option when using elements. 
-> Typescript cannot convey the element type via reflection, only that the field is of type `Array`
-> which is not enough information to deserialize the array.
 
 The above will expect an 8-bit "count" field (indicates how many items are in the array), followed by that number of 
 `PartElement` syntax objects. Since `ItemElement` is 8 bits long, when the count is `3`, there will be `3` additional 
@@ -372,9 +372,7 @@ In the above case, the second field is only present when the first field is `10`
 
 ### Dynamic lengths
 
-Sometimes the length of a field depends on what has been read before the field being read. Whereever `BitstreamElement` 
-lets you specify a length you can also provide a "determinant" function which determines the length instead of a 
-literal number:
+Sometimes the length of a field depends on what has been read before the field being read.  You can specify lengths as _determinant_ functions which determine lengths dynamically:
 
 ```typescript
 class ItemElement extends BitstreamElement {
@@ -384,15 +382,18 @@ class ItemElement extends BitstreamElement {
 ```
 
 In the above, if `length` is read as `30`, then the `value` field is read/written as 30 bits long.
+Determinants can make use of any property of the instance which appear in the bitstream before the current element. 
+They are also passed the bitstream element which contains this one (if one exists).
 
-Discriminants are available on most other properties as well. Discriminants are an important mechanism to enable 
-element variation.
+Determinants are available on many other properties as well. Where booleans are expected _discriminants_ work the same 
+way. Examples of features that accept discriminants include `hasMore`, `presentWhen` and discriminants are the core 
+concept which enabling element variation (`@Variant()`).
 
 ### Variation
 
-Many bitstream formats have the concept of _specialization_. BitstreamElement represents this using the "Variant" 
-system. Any BitstreamElement class may have zero or more "Variant" classes which are automatically substituted for the 
-class which is being read.
+Many bitstream formats make use of the concept of specialization. BitstreamElement supports this using its variation
+system. Any BitstreamElement class may have zero or more classes (which are marked with `@Variant()`) which are 
+automatically substituted for the class which is being read provided the discriminant passed to `@Variant()` holds true.
 
 ```typescript
 class BaseElement extends BitstreamElement {
@@ -410,11 +411,12 @@ class Type2Element extends BaseElement {
 }
 ```
 
-When reading an instance of `BaseElement` the library automatically checks the _discriminants_ specified on the defined 
+When reading an instance of `BaseElement` the library automatically checks the discriminants specified on the defined 
 Variant classes to determine the appropriate subclass to substitute. In the case above, if `type` is read as `0x2` when 
 performing `await BaseElement.read(reader)`, then the result will be an instance of `Type2Element`.
 
-Note that variation which occurs at _the end_ of a bitstream element is referred to as "tail variation".
+> **Note:** Variation which occurs at _the end_ of a bitstream element (as above) is referred to as "tail variation". 
+> Variation which occurs in _the middle_ of a bitstream element is referred to as "marked variation".
 
 ### Marked variation
 
@@ -459,7 +461,54 @@ class Type2Element extends BaseElement {
 }
 ```
 
-The above element will always write `123` in the field specified by `version`.
+The above element will always write `123` in the field specified by `version`. 
+
+You can depend on properties of the containing object as well. Unlike determinants used during reading, these functions
+have full access to the value being serialized, so they can look ahead as well as behind for determining the value to
+write.
+
+```typescript
+class Type2Element extends BaseElement {
+    @Field(version, { writtenValue: i => i.items.length })
+    count : number;
+
+    @Field(i => i.count, { array: { type: Number, elementLength: 8 }})
+    items : number[];
+}
+```
+
+This sort of arrangement is useful for handling more complex array length scenarios, as `count` is able to be parsed 
+and serialized independently from `items`, thus allowing `items` to reference `count` in it's determinant function.
+
+Similarly, when writing the value to bitstream, the value found in `items` determines the value of `count`, ensuring 
+that the two are always in sync _on the wire_. 
+
+One downside of this approach is that callers interacting with the Type2Element instances must be aware that `count`
+and `items` are not intrinsically linked (even if temporarily), and thus may not agree at all times.
+
+A cleaner approach to handle this is to encapsulate this into the object and forbid writing to `count` outside of 
+parsing:
+
+```typescript
+class Type2Element extends BaseElement {
+    @Field(version, { writtenValue: i => i.items.length })
+    private $count : number;
+
+    get count() { return this.items?.length ?? this.$count; }
+
+    @Field(i => i.count, { array: { type: Number, elementLength: 8 }})
+    private $items : number[];
+
+    get items() { return this.items; }
+    set items(value) { 
+        this.$items = value ?? []; 
+        this.$count = this.$items.length;
+    }
+}
+```
+
+Here `count` and `items.length` will always agree at all times, with the bonus that assigning `undefined` to the array
+is forbidden.
 
 ### Measurement
 
@@ -531,7 +580,8 @@ class Type2Element extends BaseElement {
 }
 ```
 
-In the case above the type of the determinant is carried through into the `measureFrom()` call, and Typescript will alert you if you reference a field that doesn't exist on `Type2Element`.
+In the case above the type of the determinant is carried through into the `measureFrom()` call, and Typescript will 
+alert you if you reference a field that doesn't exist on `Type2Element`.
 
 ### Reserved fields
 
@@ -608,6 +658,23 @@ secondElement.deserializeFrom(bitstreamReader, firstElement);
 
 Here, we are passing a previously decoded element into the `deserializeFrom()` of the element being deserialized. You 
 could pass any arbitrary data in this fashion, giving you flexibility in how you handle advanced serialization.
+
+# Architecture
+
+## Generators 
+
+The elements system uses generators internally in a coroutine-like fashion for allowing parsing to work asynchronously 
+while still taking little or no performance penalty when using the parser in a synchronous manner. When the bitstream 
+becomes exhausted during reading, the reader yields the number of bits it needs. The caller is then responsible 
+for waiting until that amount of bits is available, and then resuming the generator where it left off. The caller uses
+`BitstreamReader.assure()` to accomplish this. 
+
+For this reason, many lower level read operations return `Generator` instead of the final value or the `Promise`. In
+a fully synchronous setting (such as `deserialize` or an already assured read), the caller will use the generator to
+get a single (and final) value back which will be the value that was read. 
+
+Using generators internally provides a massive performance boost over doing the same with Promises as the original 
+version of this library did. See below for an analysis of the relevant performance aspects.
 
 # Performance
 
