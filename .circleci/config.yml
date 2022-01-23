@@ -20,6 +20,8 @@ commands:
             - node_modules
           key: v1-dependencies-<< parameters.version >>-{{ checksum "package.json" }}
       - run: npm test
+      - store_artifacts:
+          path: coverage
 jobs:
   node-15:
     docker:

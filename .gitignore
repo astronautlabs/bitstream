@@ -2,3 +2,5 @@ dist/
 dist.esm/
 node_modules/
 debug.log
+coverage/
+.nyc_output/

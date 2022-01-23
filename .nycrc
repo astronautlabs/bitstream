@@ -1,0 +1,7 @@
+{
+    "all": true,
+    "extension": [".ts", ".js"],
+    "include": ["dist/**/*.js", "src/**/*.ts"],
+    "reporter": [ "lcov" ]
+
+}
