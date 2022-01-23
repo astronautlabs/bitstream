@@ -3,12 +3,18 @@
 [![npm](https://img.shields.io/npm/v/@astronautlabs/bitstream)](https://npmjs.com/package/@astronautlabs/bitstream)
 [![CircleCI](https://circleci.com/gh/astronautlabs/bitstream.svg?style=svg)](https://circleci.com/gh/astronautlabs/bitstream)
 
+- **Isomorphic**: Works in Node.js and in the browser
+- **Zero-dependency**: No runtime dependencies
+- **Battle-hardened**: Used to implement media standards at Astronaut Labs
+- **Comprehensive testing**: 57.5% coverage and growing!
+- **Performant**: Elements use generators (not promises) internally to maximize performance
+- **Flexible**: Supports both imperative and declarative styles
+- **Modern**: Ships as ES modules (with CommonJS fallback)
+
 Highly performant Typescript library for reading and writing to "bitstreams": tightly packed binary streams containing 
 fields of varying lengths of bits. This package lets you treat a series of bytes as a series of bits without needing to 
 manage which bytes the desired bit-fields fall within. Bitstreams are most useful when implementing network protocols 
 and data formats (both encoders and decoders).
-
-The library can be used both on the server-side (Node.js) and in the browser.
 
 # Installation
 
