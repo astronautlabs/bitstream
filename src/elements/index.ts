@@ -9,6 +9,7 @@ export * from './field-options';
 export * from './field';
 export * from './length-determinant';
 export * from './null-serializer';
+export * from './number-options';
 export * from './number-serializer';
 export * from './resolve-length';
 export * from './serializer';

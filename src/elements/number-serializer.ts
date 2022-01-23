@@ -19,7 +19,15 @@ export class NumberSerializer implements Serializer {
         if (!reader.isAvailable(length))
             yield length;
         
-        return reader.readSync(length);
+        let format = field.options?.number?.format ?? 'unsigned';
+        if (format === 'unsigned')
+            return reader.readSync(length);
+        else if (format === 'signed')
+            return reader.readSignedSync(length);
+        else if (format === 'float')
+            return reader.readFloatSync(length);
+        else
+            throw new TypeError(`Unsupported number format '${format}'`);
     }
 
     write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: any) {
@@ -33,6 +41,15 @@ export class NumberSerializer implements Serializer {
             throw new Error(`Failed to resolve length of number via 'length' determinant: ${e.message}`);
         }
 
-        writer.write(length, value);
+        let format = field.options?.number?.format ?? 'unsigned';
+
+        if (format === 'unsigned')
+            writer.write(length, value);
+        else if (format === 'signed')
+            writer.writeSigned(length, value);
+        else if (format === 'float')
+            writer.writeFloat(length, value);
+        else
+            throw new TypeError(`Unsupported number format '${format}'`);
     }
 }

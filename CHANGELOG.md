@@ -1,7 +1,8 @@
 # v3.0.0
 
 Features:
-- TBD
+- Ability to read/write IEEE 754 floating point 
+- Ability to read/write signed (two's complement) integers
 
 Breaking changes:
 - TBD

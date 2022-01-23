@@ -5,6 +5,7 @@ import { Discriminant } from "../common";
 import { Serializer } from "./serializer";
 import { ValueDeterminant } from "./value-determinant";
 import { VariantDefinition } from "./variant-definition";
+import { NumberOptions } from "./number-options";
 
 /**
  * Defines options available for properties marked with `@Field()` within BitstreamElement classes.
@@ -22,6 +23,11 @@ export interface FieldOptions {
      * Specify options specific to string fields, such as text encoding and null termination.
      */
     string? : StringEncodingOptions;
+
+    /**
+     * Specify options specific to number fields
+     */
+    number? : NumberOptions;
 
     /**
      * Specify options specific to array fields, such as how the length of the array should be 

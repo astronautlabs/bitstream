@@ -118,6 +118,44 @@ export class BitstreamWriter {
             }
         }
     }
+
+    writeSigned(length : number, value : number) {
+        const max = 2**(length - 1) - 1; // ie 127
+        const min = -(2**(length - 1)); // ie -128
+        const originalValue = value;
+
+        value = Number(value);
+
+        if (!Number.isFinite(value))
+            throw new TypeError(`Value must be finite. Value was: ${JSON.stringify(originalValue)}`);
+        
+        if (Number.isNaN(value))
+            throw new TypeError(`Value is not a number (NaN). Passed value was: ${JSON.stringify(originalValue)}`);
+            
+        if (value > max)
+            throw new TypeError(`Cannot represent ${value} in I${length} format: Value too large (min=${min}, max=${max})`);
+
+        if (value < min)
+            throw new TypeError(`Cannot represent ${value} in I${length} format: Negative value too small (min=${min}, max=${max})`);
+        
+        return this.write(length, value >= 0 ? value : (~(-value) + 1) >>> 0);
+    }
+
+    writeFloat(length : number, value : number) {
+        if (length !== 32 && length !== 64)
+            throw new TypeError(`Invalid length (${length} bits) Only 4-byte (32 bit / single-precision) and 8-byte (64 bit / double-precision) IEEE 754 values are supported`);
+        
+        let buf = new ArrayBuffer(length / 8);
+        let view = new DataView(buf);
+
+        if (length === 32)
+            view.setFloat32(0, value);
+        else if (length === 64)
+            view.setFloat64(0, value);
+
+        for (let i = 0, max = buf.byteLength; i < max; ++i)
+            this.write(8, view.getUint8(i));
+    }
 }
 
 /**

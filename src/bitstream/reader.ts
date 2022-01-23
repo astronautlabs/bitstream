@@ -6,6 +6,8 @@ import { StringEncodingOptions } from "./string-encoding-options";
 export interface BitstreamRequest {
     resolve : (buffer : number) => void;
     length : number;
+    signed? : boolean;
+    float? : boolean;
     peek : boolean;
 }
 
@@ -185,13 +187,55 @@ export class BitstreamReader {
     }
     
     /**
-     * Read a number of the given bitlength synchronously. If there are not enough 
+     * Read an unsigned integer of the given bit length synchronously. If there are not enough 
      * bits available, an error is thrown.
+     * 
      * @param length The number of bits to read
-     * @returns The number read from the bitstream
+     * @returns The unsigned integer that was read
      */
     readSync(length : number): number {
         return this.readCoreSync(length, true);
+    }
+
+    /**
+     * Read a two's complement signed integer of the given bit length synchronously. If there are not
+     * enough bits available, an error is thrown.
+     * 
+     * @param length The number of bits to read
+     * @returns The signed integer that was read
+     */
+    readSignedSync(length : number): number {
+        const u = this.readSync(length);
+        const signBit = (2**(length - 1));
+        const mask = signBit - 1;
+        return (u & signBit) === 0 ? u : -(~(u - 1) & mask) >>> 0;
+    }
+
+    /**
+     * Read an IEEE 754 floating point value with the given bit length (32 or 64). If there are not 
+     * enough bits available, an error is thrown.
+     * 
+     * @param length Must be 32 for 32-bit single-precision or 64 for 64-bit double-precision. All
+     *        other values result in TypeError
+     * @returns The floating point value that was read
+     */
+    readFloatSync(length : number): number {
+        if (length !== 32 && length !== 64)
+            throw new TypeError(`Invalid length (${length} bits) Only 4-byte (32 bit / single-precision) and 8-byte (64 bit / double-precision) IEEE 754 values are supported`);
+        
+        if (!this.isAvailable(length))
+            throw new Error(`underrun: Not enough bits are available (requested=${length}, available=${this.bufferedLength}, buffers=${this.buffers.length})`);
+
+        let buf = new ArrayBuffer(length / 8);
+        let view = new DataView(buf);
+
+        for (let i = 0, max = buf.byteLength; i < max; ++i)
+            view.setUint8(i, this.readSync(8));
+        
+        if (length === 32)
+            return view.getFloat32(0, false);
+        else if (length === 64)
+            return view.getFloat64(0, false);
     }
 
     private readCoreSync(length : number, consume : boolean): number {
@@ -284,10 +328,11 @@ export class BitstreamReader {
     }
 
     /**
-     * Asynchronously read a number of the given bitlength. If there are not enough bits available
-     * to complete the operation, the operation is delayed until enough bits become available
+     * Read an unsigned integer with the given bit length, waiting until enough bits are 
+     * available for the operation. 
+     * 
      * @param length The number of bits to read
-     * @returns A promise which resolves with the number read from the bitstream
+     * @returns A promise which resolves to the unsigned integer once it is read
      */
     read(length : number) : Promise<number> {
         this.ensureNoReadPending();
@@ -296,6 +341,47 @@ export class BitstreamReader {
             return Promise.resolve(this.readSync(length));
         } else {
             let request : BitstreamRequest = { resolve: null, length, peek: false };
+            let promise = new Promise<number>(resolve => request.resolve = resolve);
+            this.blockedRequest = request;
+            return promise;
+        }
+    }
+
+    /**
+     * Read a two's complement signed integer with the given bit length, waiting until enough bits are 
+     * available for the operation. 
+     * 
+     * @param length The number of bits to read
+     * @returns A promise which resolves to the signed integer value once it is read
+     */
+    readSigned(length : number) : Promise<number> {
+        this.ensureNoReadPending();
+        
+        if (this.available >= length) {
+            return Promise.resolve(this.readSignedSync(length));
+        } else {
+            let request : BitstreamRequest = { resolve: null, length, peek: false, signed: true };
+            let promise = new Promise<number>(resolve => request.resolve = resolve);
+            this.blockedRequest = request;
+            return promise;
+        }
+    }
+
+    /**
+     * Read an IEEE 754 floating point value with the given bit length, waiting until enough bits are
+     * available for the operation.
+     * 
+     * @param length The number of bits to read (must be 32 for 32-bit single-precision or 
+     *                  64 for 64-bit double-precision)
+     * @returns A promise which resolves to the floating point value once it is read
+     */
+    readFloat(length : number) : Promise<number> {
+        this.ensureNoReadPending();
+        
+        if (this.available >= length) {
+            return Promise.resolve(this.readFloatSync(length));
+        } else {
+            let request : BitstreamRequest = { resolve: null, length, peek: false, float: true };
             let promise = new Promise<number>(resolve => request.resolve = resolve);
             this.blockedRequest = request;
             return promise;
@@ -337,6 +423,10 @@ export class BitstreamReader {
 
             if (request.peek) {
                 request.resolve(0);
+            } else if (request.signed) {
+                request.resolve(this.readSignedSync(request.length));
+            } else if (request.float) {
+                request.resolve(this.readFloatSync(request.length));
             } else {
                 request.resolve(this.readSync(request.length));
             }
