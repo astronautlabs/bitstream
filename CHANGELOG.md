@@ -9,9 +9,16 @@ Features:
 Breaking changes:
 - Removed the `BitstreamReader.unread()` method which has been deprecated since `v1.0.1` released March 28, 2021.
 - The `BitstreamElement.read()` family of operations now accepts an options bag instead of positional parameters
-- An exception will now be thrown when trying to serialize (+/-) `Infinity` to an integer number field (either signed or unsigned)
+- An exception will now be thrown when trying to serialize (+/-) `Infinity` to an integer number field (either signed 
+  or unsigned)
 - `BitstreamElement.deserialize()` no longer returns a Promise. The operation has not been asynchronous since the 
   generator rewrite in 2.0, so promises are not required here and unnecessarily complicate efficient deserialization.
+- In previous versions the length parameter of `@Field()` was ignored by `ArraySerializer` even though it was documented
+  as a valid way to specify the item count of the array. This version makes `ArraySerializer` respect this value when
+  `options.array.count` is not specified. This matches the design intention, but since the default count was zero, this 
+  is technically a breaking change since, for example, `@Field(3, { array: { elementSize: 8 }}) items : number[]` 
+  previously would read zero numbers and now it will read three.
+  
 # v2.1.1
 - Fix: `@ReservedLow` should actually emit low bits 
 

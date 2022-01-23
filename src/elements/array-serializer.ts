@@ -19,6 +19,8 @@ export class ArraySerializer implements Serializer {
             count = reader.readSync(field.options.array.countFieldLength);
         } else if (field?.options?.array?.count) {
             count = resolveLength(field.options.array.count, parent, field);
+        } else if (field?.length) {
+            count = resolveLength(field?.length, parent, field);
         }
 
         if (parent) {

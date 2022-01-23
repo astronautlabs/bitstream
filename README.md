@@ -288,8 +288,10 @@ class BufferElement extends BitstreamElement {
 > **Important:** You must specify `elementLength` in order for the library to know how many bits each 
 > number in the array is in the bitstream. 
 
-You can also read signed and floating point numbers by specifying the `options.number.format` option 
-(see Number Fields for more information).
+You can read signed integers and floating point values instead of unsigned integers by specifying the `options.number.
+format` option (see Number Fields for more information).
+
+When handling arrays, the length parameter of `@Field()` is used to represent the item count for the array by default. Alternatively (and mainly for historical reasons) you can also set the `options.array.count` property.
 
 #### Derived lengths
 

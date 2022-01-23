@@ -477,4 +477,123 @@ describe('BitstreamElement', it => {
         CustomElement.deserialize(Buffer.alloc(1));
         expect(passed.whoAmI()).to.equal('variant');
     });
+    it('subelements have the same context object as the parent', () => {
+        let subObserved;
+        let parentObserved;
+
+        class SubElement extends BitstreamElement {
+            onParseStarted() { subObserved = this.context; }
+            @Field(8) byte;
+        }
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() { parentObserved = this.context; }
+            @Field() subelement : SubElement;
+        }
+
+        CustomElement.deserialize(Buffer.alloc(1));
+        expect(subObserved).to.equal(parentObserved);
+    });
+    it('sibling elements have the same context object as the parent', () => {
+        let subObserved;
+        let sub2Observed;
+        let parentObserved;
+
+        class SubElement extends BitstreamElement {
+            onParseStarted() { subObserved = this.context; }
+            @Field(8) byte;
+        }
+        class SubElement2 extends BitstreamElement {
+            onParseStarted() { sub2Observed = this.context; }
+            @Field(8) byte;
+        }
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() { parentObserved = this.context; }
+            @Field() subelement : SubElement;
+            @Field() subelement2 : SubElement2;
+        }
+
+        CustomElement.deserialize(Buffer.alloc(2));
+        expect(subObserved).to.equal(parentObserved);
+        expect(sub2Observed).to.equal(parentObserved);
+    });
+    it('passed context should be made available to element', () => {
+        let observed;
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() { observed = this.context; }
+            @Field(8) byte : number;
+        }
+
+        let context = {};
+        CustomElement.deserialize(Buffer.alloc(1), { context });
+        expect(observed).to.equal(context);
+    });
+    it('passed context should be made available to sibling subelements', () => {
+        let subObserved;
+        let sub2Observed;
+        let parentObserved;
+
+        class SubElement extends BitstreamElement {
+            onParseStarted() { subObserved = this.context; }
+            @Field(8) byte;
+        }
+        class SubElement2 extends BitstreamElement {
+            onParseStarted() { sub2Observed = this.context; }
+            @Field(8) byte;
+        }
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() { parentObserved = this.context; }
+            @Field() subelement : SubElement;
+            @Field() subelement2 : SubElement2;
+        }
+
+        let context = {};
+        CustomElement.deserialize(Buffer.alloc(2), { context });
+        expect(parentObserved).to.equal(context);
+        expect(subObserved).to.equal(context);
+        expect(sub2Observed).to.equal(context);
+    });
+    it('context should be shared by parent and array field elements', () => {
+        let subObserved;
+        let parentObserved;
+
+        class SubElement extends BitstreamElement {
+            onParseStarted() { subObserved = this.context; }
+            @Field(8) byte;
+        }
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() { parentObserved = this.context; }
+            @Field(1, { array: { type: SubElement } }) array : SubElement[];
+        }
+
+        let element = CustomElement.deserialize(Buffer.alloc(1));
+        expect(element.array.length).to.equal(1);
+
+        expect(subObserved).to.equal(parentObserved);
+    });
+    it('passed context should be made available to array elements', () => {
+        let subObserved;
+        let parentObserved;
+
+        class SubElement extends BitstreamElement {
+            onParseStarted() { subObserved = this.context; }
+            @Field(8) byte;
+        }
+
+        class CustomElement extends BitstreamElement {
+            onParseStarted() { parentObserved = this.context; }
+            @Field(1, { array: { type: SubElement }}) array : SubElement[];
+        }
+
+        let context = {};
+        let element = CustomElement.deserialize(Buffer.alloc(1), { context });
+        expect(element.array.length).to.equal(1);
+
+        expect(parentObserved).to.equal(context);
+        expect(subObserved).to.equal(context);
+    });
 })
