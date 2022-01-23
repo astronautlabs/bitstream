@@ -1,3 +1,32 @@
+# v3.0.0
+
+Features:
+- TBD
+
+Breaking changes:
+- TBD
+
+# v2.1.1
+- Fix: `@ReservedLow` should actually emit low bits 
+
+# v2.1.0
+- Add `@ReservedLow` decorator for cases where bits must be low instead of high (as in `@Reserved`)
+
+# v2.0.4
+- Fix: Do not crash when `Buffer` is unavailable
+
+# v2.0.3
+- Improved documentation, particularly performance guidance
+- Eliminated dependency on `streambuffers`
+- `Uint8Array` can now be used instead of `Buffer` to allow the library to be used on the web
+
+# v2.0.2
+- Fixed a bug where BitstreamElement.deserialize() would return a promise resolved with a generator instead of 
+  the final element instance
+
+# v2.0.1
+- Much improved documentation
+
 # v2.0.0
 
 - Use generators instead of promises to implement blocking reads. This allows us to defer the strategy for handling 
