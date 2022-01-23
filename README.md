@@ -496,7 +496,7 @@ class Type2Element extends BaseElement {
 
     get count() { return this.items?.length ?? this.$count; }
 
-    @Field(i => i.count, { array: { type: Number, elementLength: 8 }})
+    @Field(i => i.$count, { array: { type: Number, elementLength: 8 }})
     private $items : number[];
 
     get items() { return this.items; }
