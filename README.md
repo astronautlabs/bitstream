@@ -16,6 +16,15 @@ fields of varying lengths of bits. This package lets you treat a series of bytes
 manage which bytes the desired bit-fields fall within. Bitstreams are most useful when implementing network protocols 
 and data formats (both encoders and decoders).
 
+# Motivation
+
+At [Astronaut Labs](https://astronautlabs.com) we build broadcast software for Node.js using Typescript. Doing that 
+requires implementing lots of binary specifications. We needed a way to do this at scale while ensuring accuracy and 
+quality. We also see value in making our standards implementations open source so they can serve as approachable reference 
+implementations for other implementors. The best way to do that is to be extremely comprehensive in the way we build them.
+Other implementations tend to skip "irrelevant" details or take shortcuts, we strive to avoid that and implement the standard
+as specified, even if we don't need parts of it for our immediate needs
+
 # Installation
 
 `npm install @astronautlabs/bitstream`
