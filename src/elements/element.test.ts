@@ -8,6 +8,58 @@ import { BufferedWritable } from "../common";
 import { DefaultVariant, VariantMarker } from ".";
 
 describe('BitstreamElement', it => {
+    describe(': Casting', it => {
+        it('as() allows correct casts', () => {
+            class CustomElement extends BitstreamElement {}
+            class ChildElement extends CustomElement {}
+            let element : CustomElement = new ChildElement();
+            expect(element.as(ChildElement)).to.equal(element);
+        });
+        it('as() throws on invalid casts', () => {
+            class CustomElement extends BitstreamElement {}
+            class ChildElement extends CustomElement {}
+            let element : CustomElement = new CustomElement();
+            let caught;
+
+            try {
+                element.as(ChildElement)
+            } catch (e) {
+                caught = e;
+            }
+
+            expect(caught).to.exist;
+        });
+        it('is() tells the truth', () => {
+            class CustomElement extends BitstreamElement {}
+            class ChildElement extends CustomElement {}
+            let element : CustomElement = new ChildElement();
+            
+            expect(element.is(BitstreamElement)).to.be.true;
+            expect(element.is(CustomElement)).to.be.true;
+            expect(element.is(ChildElement)).to.be.true;
+
+            element = new CustomElement();
+            
+            expect(element.is(BitstreamElement)).to.be.true;
+            expect(element.is(CustomElement)).to.be.true;
+            expect(element.is(ChildElement)).to.be.false;
+
+            element = new BitstreamElement();
+
+            expect(element.is(BitstreamElement)).to.be.true;
+            expect(element.is(CustomElement)).to.be.false;
+            expect(element.is(ChildElement)).to.be.false;
+
+            if (element.is(ChildElement)) {
+                // This is a meta-test to ensure that is() returns type `this is T` to allow for type inferencing.
+                // If you receive a Typescript compilation error here, it is because is() no longer has the correct
+                // semantics.
+
+                let child : ChildElement = element;
+            }
+        });
+
+    });
     describe(': Cloning', it => {
         it('behaves correctly', () => {
             class CustomElement extends BitstreamElement {
@@ -1426,6 +1478,69 @@ describe('BitstreamElement', it => {
             buf = new CustomElement().with({ a: 1, b: 2, c: 3, d: 4 }).serialize(i => i.a, i => i.c);
             expect(Array.from(buf)).to.eql([ 1, 2, 3 ]);
         });
+        it('can read an element synchronously if enough bits are available', () => {
+            
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+                @Field(8) c : number;
+                @Field(8) d : number;
+            }
+
+            let reader = new BitstreamReader();
+            reader.addBuffer(Buffer.from([ 1, 2, 3, 4]));
+
+            let result = CustomElement.readSync(reader);
+
+            expect(result.a).to.equal(1);
+            expect(result.b).to.equal(2);
+            expect(result.c).to.equal(3);
+            expect(result.d).to.equal(4);
+        });
+        it('can try to read an element synchronously', () => {
+            
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+                @Field(8) c : number;
+                @Field(8) d : number;
+            }
+
+            let reader = new BitstreamReader();
+            reader.addBuffer(Buffer.from([ 1, 2, 3]));
+
+            let result = CustomElement.tryRead(reader); expect(result).to.be.undefined;
+            result = CustomElement.tryRead(reader); expect(result).to.be.undefined;
+            result = CustomElement.tryRead(reader); expect(result).to.be.undefined;
+            result = CustomElement.tryRead(reader); expect(result).to.be.undefined;
+            reader.addBuffer(Buffer.from([ 4 ]));
+            result = CustomElement.tryRead(reader); expect(result).not.to.be.undefined;
+
+            expect(result.a).to.equal(1);
+            expect(result.b).to.equal(2);
+            expect(result.c).to.equal(3);
+            expect(result.d).to.equal(4);
+        });
+        it('throws when reading an element synchronously if enough bits are not available', () => {
+            
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+                @Field(8) c : number;
+                @Field(8) d : number;
+            }
+
+            let reader = new BitstreamReader();
+            reader.addBuffer(Buffer.from([ 1, 2, 3 ]));
+            let caught;
+            try {
+                CustomElement.readSync(reader);
+            } catch (e) {
+                caught = e;
+            }
+
+            expect(caught).to.exist;
+        });
     });
     describe(': Measurement', it => {
         it('can measure an element with static field sizes', () => {
@@ -1436,6 +1551,24 @@ describe('BitstreamElement', it => {
             }
 
             expect(new CustomElement().measure()).to.equal(24);
+        });
+        it('measureFrom() works as expected', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @Field(8) value : number;
+                @Field(16) suffix : number;
+            }
+
+            expect(new CustomElement().measureFrom('value')).to.equal(24);
+        });
+        it('measureTo() works as expected', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(16) type : number;
+                @Field(8) value : number;
+                @Field(8) suffix : number;
+            }
+
+            expect(new CustomElement().measureTo('value')).to.equal(24);
         });
         it('takes determinants into account', () => {
             class CustomElement extends BitstreamElement {

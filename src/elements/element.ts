@@ -237,7 +237,6 @@ export class BitstreamElement {
             try {
                 field.options.serializer.write(writer, field.type, this, field, writtenValue);
             } catch (e) {
-                console.log(`uh oh, got a problem with da serializer`);
                 console.error(`Failed to write field ${field.type.name}#${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
                 console.error(e);
                 throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
@@ -906,8 +905,9 @@ export class BitstreamElement {
         let previouslyRetaining = reader.retainBuffers;
         let startOffset = reader.offset;
 
+        reader.retainBuffers = true;
+
         try {
-            reader.retainBuffers = true;
 
             let iterator = this.read(reader, options);
             let result = iterator.next();

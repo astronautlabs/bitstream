@@ -71,7 +71,7 @@ export class BitstreamReader {
                 this._offset = value;
                 this._offsetIntoBuffer = offsetIntoBuffer;
                 this.bufferedLength = buf.length * 8 - this._offsetIntoBuffer;
-                for (let j = i; j < max; ++j)
+                for (let j = i + 1; j < max; ++j)
                     this.bufferedLength += this.buffers[j].length * 8;
 
                 return;
@@ -277,8 +277,18 @@ export class BitstreamReader {
         let bitLength = 0;
 
         while (remainingLength > 0) {
+            /* istanbul ignore next */
+            if (bufferIndex >= this.buffers.length)
+                throw new Error(`Internal error: Buffer index out of range (index=${bufferIndex}, count=${this.buffers.length}), offset=${this.offset}, readLength=${length}, available=${this.available})`);
+
             let buffer = this.buffers[bufferIndex];
-            let byte = BigInt(buffer[Math.floor(offset / 8)]);
+            let byteOffset = Math.floor(offset / 8);
+
+            /* istanbul ignore next */
+            if (byteOffset >= buffer.length)
+                throw new Error(`Internal error: Current buffer (index ${bufferIndex}) has length ${buffer.length} but our position within the buffer is ${byteOffset}! offset=${this.offset}, bufs=${this.buffers.length}`);
+
+            let byte = BigInt(buffer[byteOffset]);
             
             let bitOffset = offset % 8;
             let bitContribution = Math.min(8 - bitOffset, remainingLength);
