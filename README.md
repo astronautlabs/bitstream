@@ -6,7 +6,7 @@
 - **Isomorphic**: Works in Node.js and in the browser
 - **Zero-dependency**: No runtime dependencies
 - **Battle-hardened**: Used to implement media standards at Astronaut Labs
-- **Comprehensive testing**: [89.77% coverage](https://200-305936359-gh.circle-artifacts.com/0/coverage/lcov-report/index.html) and growing!
+- **Comprehensive testing**: [90.38% coverage](https://218-305936359-gh.circle-artifacts.com/0/coverage/lcov-report/index.html) and growing!
 - **Performant**: Elements use generators (not promises) internally to maximize performance
 - **Flexible**: Supports both imperative and declarative styles
 - **Modern**: Ships as ES modules (with CommonJS fallback)
