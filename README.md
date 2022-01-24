@@ -18,12 +18,13 @@ and data formats (both encoders and decoders).
 
 # Motivation
 
-At [Astronaut Labs](https://astronautlabs.com) we build broadcast software for Node.js using Typescript. Doing that 
-requires implementing lots of binary specifications. We needed a way to do this at scale while ensuring accuracy and 
-quality. We also see value in making our standards implementations open source so they can serve as approachable reference 
-implementations for other implementors. The best way to do that is to be extremely comprehensive in the way we build them.
-Other implementations tend to skip "irrelevant" details or take shortcuts, we strive to avoid that and implement the standard
-as specified, even if we don't need parts of it for our immediate needs
+[Astronaut Labs](https://astronautlabs.com) is building a next-generation broadcast technology stack centered around 
+Node.js and Typescript. That requires implementing a large number of binary specifications. We needed a way to do 
+this at scale while ensuring accuracy, quality and comprehensiveness. We also see value in making our libraries open 
+source so they can serve as approachable reference implementations for other implementors and increase competition in 
+our industry. The best way to do that is to be extremely comprehensive in the way we build these libraries.
+Other implementations tend to skip "irrelevant" details or take shortcuts, we strive to avoid this to produce the most 
+complete libraries possible, even if we don't need every detail for our immediate needs.
 
 # Installation
 
