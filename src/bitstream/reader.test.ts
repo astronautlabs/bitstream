@@ -154,10 +154,12 @@ describe('BitstreamReader', it => {
         expect(bitstream.readSync(8)).to.equal(5);
         expect(bitstream.readSync(8)).to.equal(6);
 
+        let caught;
         try {
             bitstream.offset = 0;
-            throw new Error(`Expected throw`);
-        } catch (e) { } 
+        } catch (e) { caught = e; } 
+
+        expect(caught).to.exist;
     });
     it('offset is always increasing even when retainBuffers=false', () => {
         let bitstream = new BitstreamReader();
@@ -411,10 +413,12 @@ describe('BitstreamReader', it => {
         let bitstream = new BitstreamReader();
         bitstream.addBuffer(Buffer.alloc(32));
 
+        let caught;
         try {
             bitstream.readFloatSync(13);
-            throw new Error(`Expected throw`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught).to.exist;
     });
 
     it('peek() reads an unsigned integer without consuming it', async () => {
@@ -434,28 +438,34 @@ describe('BitstreamReader', it => {
     it('.readFloatSync() throws when not enough bits are available', () => {
         let bitstream = new BitstreamReader();
 
+        let caught;
         try {
             bitstream.readFloatSync(32);
-            throw new Error(`Expected throw`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught).to.exist;
     });
 
     it('readSync() throws when not enough bits are available', () => {
         let bitstream = new BitstreamReader();
+        let caught;
 
         try {
             bitstream.readSync(32);
-            throw new Error(`Expected throw`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught).to.exist;
     });
 
     it('.readSignedSync() throws when not enough bits are available', () => {
         let bitstream = new BitstreamReader();
+        let caught;
 
         try {
             bitstream.readSignedSync(32);
-            throw new Error(`Expected throw`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught).to.exist;
     });
 
     it('.read() fast paths when enough bits are available', async () => {
@@ -492,18 +502,24 @@ describe('BitstreamReader', it => {
     it('.read() allows only one async read at a time', async () => {
         let bitstream = new BitstreamReader();
         bitstream.read(8);
+
+        let caught;
         try {
             await bitstream.read(8);
-            throw new Error(`Expected read() to throw`);
-        } catch (e) {}
+        } catch (e) { caught = e; }
+        
+        expect(caught, `Expected read() to throw`).to.exist;
     });
     it('.assure() allows only one async call at a time', async () => {
         let bitstream = new BitstreamReader();
         bitstream.assure(8);
+
+        let caught;
         try {
             await bitstream.assure(8);
-            throw new Error(`Expected assure() to throw`);
-        } catch (e) {}
+        } catch (e) { caught = e; }
+        
+        expect(caught, `Expected assure() to throw`).to.exist;
     });
     it('.readStringSync() reads a string correctly', () => {
         let bitstream = new BitstreamReader();
@@ -554,10 +570,13 @@ describe('BitstreamReader', it => {
         let buf = Buffer.alloc(32);
         buf.write('hello', 'ucs-2');
         bitstream.addBuffer(buf);
+
+        let caught;
         try {
             bitstream.readStringSync(16, { encoding: 'not-a-real-encoding' });
-            throw new Error(`Expected throw`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught).to.exist;
     });
     it('.readStringSync() throws with any encoding other than utf-8 when Buffer is not available', () => {
 
@@ -568,10 +587,13 @@ describe('BitstreamReader', it => {
             let bitstream = new BitstreamReader();
             buf.write('hello', 'utf16le');
             bitstream.addBuffer(buf);
+
+            let caught;
             try {
                 bitstream.readStringSync(16, { encoding: 'utf16le' });
-                throw new Error(`Expected throw`);
-            } catch (e) { }
+            } catch (e) { caught = e; }
+
+            expect(caught).to.exist;
         } finally {
             (globalThis as any).Buffer = BufferT;
         }

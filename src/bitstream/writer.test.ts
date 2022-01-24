@@ -112,30 +112,37 @@ describe('BitstreamWriter', it => {
         let fakeStream : any = { write(buf) { bufs.push(buf); } }
         let writer = new BitstreamWriter(fakeStream, 2);
 
+        let caught;
+
         try {
             writer.write(8, NaN);
-            throw new Error(`Expected write(8, NaN) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught, `Expected write(8, NaN) to throw an exception`).to.exist;
     });
     it('throws when writing Infinity as an unsigned integer', () => {
         let bufs : Buffer[] = [];
         let fakeStream : any = { write(buf) { bufs.push(buf); } }
         let writer = new BitstreamWriter(fakeStream, 2);
 
+        let caught;
         try {
             writer.write(8, Infinity);
-            throw new Error(`Expected write(8, Infinity) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught, `Expected write(8, Infinity) to throw an exception`).to.exist;
     });
     it('throws when writing NaN as a signed integer', () => {
         let bufs : Buffer[] = [];
         let fakeStream : any = { write(buf) { bufs.push(buf); } }
         let writer = new BitstreamWriter(fakeStream, 2);
 
+        let caught;
         try {
             writer.writeSigned(8, NaN);
-            throw new Error(`Expected write(8, NaN) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught, `Expected write(8, NaN) to throw an exception`).to.exist;
     });
     it('throws when writing values outside of range', () => {
         let bufs : Buffer[] = [];
@@ -146,38 +153,53 @@ describe('BitstreamWriter', it => {
         writer.writeSigned(8, 127);
         writer.writeSigned(8, -128);
 
+        let caught;
         try {
             writer.writeSigned(8, 200);
-            throw new Error(`Expected writeSigned(8, 200) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+        
+        expect(caught, `Expected writeSigned(8, 200) to throw an exception`).to.exist;
+        caught = undefined;
+
         try {
             writer.writeSigned(8, 128);
-            throw new Error(`Expected writeSigned(8, 128) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+        
+        expect(caught, `Expected writeSigned(8, 128) to throw an exception`).to.exist;
+        caught = undefined;
+
         try {
             writer.writeSigned(8, -129);
-            throw new Error(`Expected writeSigned(8, -129) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
 
-        
+        expect(caught, `Expected writeSigned(8, -129) to throw an exception`).to.exist;
+        caught = undefined;
+
         try {
             writer.writeSigned(16, 999999);
-            throw new Error(`Expected writeSigned(8, 200) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+        
+        expect(caught, `Expected writeSigned(8, 200) to throw an exception`).to.exist;
+        caught = undefined;
+
         try {
             writer.writeSigned(16, -999999);
-            throw new Error(`Expected writeSigned(8, 128) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught, `Expected writeSigned(8, 128) to throw an exception`).to.exist;
+        caught = undefined;
     });
     it('throws when writing Infinity as a signed integer', () => {
         let bufs : Buffer[] = [];
         let fakeStream : any = { write(buf) { bufs.push(buf); } }
         let writer = new BitstreamWriter(fakeStream, 2);
 
+        let caught;
         try {
             writer.writeSigned(8, Infinity);
-            throw new Error(`Expected write(8, Infinity) to throw an exception`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught, `Expected write(8, Infinity) to throw an exception`).to.exist;
     });
     it('writes undefined as zero when unsigned', () => {
         let bufs : Buffer[] = [];
@@ -262,10 +284,12 @@ describe('BitstreamWriter', it => {
         let fakeStream : any = { write(buf) { bufs.push(buf); } }
         let writer = new BitstreamWriter(fakeStream, 4);
 
+        let caught;
         try {
             writer.writeFloat(13, 123);
-            throw new Error(`Expected error`);
-        } catch (e) { }
+        } catch (e) { caught = e; }
+
+        expect(caught).to.exist;
     });
 
     it('correctly handles NaN', () => {
@@ -358,10 +382,13 @@ describe('BitstreamWriter', it => {
             let fakeStream : any = { write(buf) { bufs.push(buf); } }
             let writer = new BitstreamWriter(fakeStream, 10);
 
+            let caught;
+
             try {
                 writer.writeString(10, 'hello', 'utf16le');
-                throw new Error(`Expected throw`);
-            } catch (e) { }
+            } catch (e) { caught = e; }
+
+            expect(caught).to.exist;
         } finally {
             (globalThis as any).Buffer = BufferT;
         }

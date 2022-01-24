@@ -1,14 +1,6 @@
 import { BitstreamMeasurer, BitstreamReader, BitstreamWriter } from "../bitstream";
 import { BufferedWritable, Constructor } from "../common";
-import { StructureSerializer } from "./structure-serializer";
-import { ArraySerializer } from "./array-serializer";
-import { BooleanSerializer } from "./boolean-serializer";
-import { BufferSerializer } from "./buffer-serializer";
 import { FieldDefinition } from "./field-definition";
-import { NullSerializer } from "./null-serializer";
-import { NumberSerializer } from "./number-serializer";
-import { resolveLength } from "./resolve-length";
-import { StringSerializer } from "./string-serializer";
 import { VariantDefinition } from "./variant-definition";
 
 /**
@@ -245,6 +237,7 @@ export class BitstreamElement {
             try {
                 field.options.serializer.write(writer, field.type, this, field, writtenValue);
             } catch (e) {
+                console.log(`uh oh, got a problem with da serializer`);
                 console.error(`Failed to write field ${field.type.name}#${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
                 console.error(e);
                 throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
@@ -310,8 +303,10 @@ export class BitstreamElement {
             try {
                 field.options.serializer.write(measurer, this.constructor, this, field, this[field.name]);
             } catch (e) {
-                console.error(`Failed to measure field ${this.constructor.name}#${String(field.name)}:`);
-                console.error(e);
+                if (globalThis.BITSTREAM_TRACE === true) {
+                    console.error(`Failed to measure field ${this.constructor.name}#${String(field.name)}:`);
+                    console.error(e);
+                }
                 throw new Error(`${this.constructor.name}#${String(field.name)}: Cannot measure field: ${e.message}`);
             }
         }

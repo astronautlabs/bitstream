@@ -1,11 +1,50 @@
 import { expect } from "chai";
 import { describe } from "razmin";
 import { Variant } from "./variant";
-import { BitstreamReader } from "../bitstream";
+import { BitstreamReader, BitstreamWriter } from "../bitstream";
 import { BitstreamElement } from "./element";
 import { Field } from "./field";
+import { BufferedWritable } from "../common";
+import { DefaultVariant, VariantMarker } from ".";
 
 describe('BitstreamElement', it => {
+    describe(': Cloning', it => {
+        it('behaves correctly', () => {
+            class CustomElement extends BitstreamElement {
+                @Field() a : number;
+                @Field() b : number;
+                @Field() c : number;
+            }
+    
+            let element = new CustomElement().with({ a: 123, b: 456, c: 789 });
+            let clone = element.clone();
+    
+            expect(clone).not.to.equal(element);
+            expect(clone.a).to.equal(123);
+            expect(clone.b).to.equal(456);
+            expect(clone.c).to.equal(789);
+        });
+        it('works only for @Field() properties', () => {
+            class CustomElement extends BitstreamElement {
+                @Field() a : number;
+                @Field() b : number;
+                @Field() c : number;
+                d : number;
+                e : number;
+            }
+    
+            let element = new CustomElement().with({ a: 123, b: 456, c: 789, d: 888, e: 999 });
+            let clone = element.clone();
+    
+            expect(clone).not.to.equal(element);
+            expect(clone.a).to.equal(123);
+            expect(clone.b).to.equal(456);
+            expect(clone.c).to.equal(789);
+            expect(clone.d).to.be.undefined;
+            expect(clone.e).to.be.undefined;
+        })
+    });
+
     describe(': Inheritance', it => {
         it('ownSyntax should be an empty array on a child element with no syntax of its own', () => {
             class CustomElement extends BitstreamElement { @Field(8) byte; }
@@ -114,6 +153,284 @@ describe('BitstreamElement', it => {
 
         });
     });
+    describe(': Numbers', it => {
+        it('reads unsigned integers', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([126, 72]));
+
+            expect(element.a).to.equal(126);
+            expect(element.b).to.equal(72);
+        });
+        it('writes unsigned integers', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+            }
+
+            let buf = new CustomElement().with({ a: 126, b: 72 }).serialize();
+            expect(Array.from(buf)).to.eql([ 126, 72 ]);
+        });
+        it('reads signed integers', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { number: { format: 'signed' }}) a : number;
+                @Field(8, { number: { format: 'signed' }}) b : number;
+                @Field(8, { number: { format: 'signed' }}) c : number;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([0xFB, 5, 0]));
+
+            expect(element.a).to.equal(-5);
+            expect(element.b).to.equal(5);
+            expect(element.c).to.equal(0);
+        });
+        it('writes signed integers', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { number: { format: 'signed' }}) a : number;
+                @Field(8, { number: { format: 'signed' }}) b : number;
+                @Field(8, { number: { format: 'signed' }}) c : number;
+            }
+
+            let buf = new CustomElement().with({ a: -5, b: 5, c: 0 }).serialize();
+            expect(Array.from(buf)).to.eql([ 0xFB, 5, 0 ]);
+        });
+        it('reads floats', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(32, { number: { format: 'float' }}) a : number;
+                @Field(32, { number: { format: 'float' }}) b : number;
+                @Field(32, { number: { format: 'float' }}) c : number;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([
+                0x42, 0xCD, 0x00, 0x00,
+                0xC3, 0xDA, 0x00, 0x00,
+                0,0,0,0
+            ]));
+
+            expect(element.a).to.equal(102.5);
+            expect(element.b).to.equal(-436);
+            expect(element.c).to.equal(0);
+        });
+        it('writes floats', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(32, { number: { format: 'float' }}) a : number;
+                @Field(32, { number: { format: 'float' }}) b : number;
+                @Field(32, { number: { format: 'float' }}) c : number;
+            }
+
+            let buf = new CustomElement().with({ a: 102.5, b: -436, c: 0 }).serialize();
+            expect(Array.from(buf)).to.eql([
+                0x42, 0xCD, 0x00, 0x00,
+                0xC3, 0xDA, 0x00, 0x00,
+                0,0,0,0
+            ]);
+        });
+        it('throws with an invalid format while reading', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(32, { number: { format: <any>'invalid' }}) a : number;
+                @Field(32, { number: { format: <any>'invalid' }}) b : number;
+                @Field(32, { number: { format: <any>'invalid' }}) c : number;
+            }
+
+            let caught;
+            try {
+                CustomElement.deserialize(Buffer.from([
+                    0x42, 0xCD, 0x00, 0x00,
+                    0xC3, 0xDA, 0x00, 0x00,
+                    0,0,0,0
+                ]));
+            } catch (e) {
+                caught = e;
+            }
+
+            expect(caught).to.exist;
+        });
+        it('throws with an invalid format while writing', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(32, { number: { format: <any>'invalid' }}) a : number;
+                @Field(32, { number: { format: <any>'invalid' }}) b : number;
+                @Field(32, { number: { format: <any>'invalid' }}) c : number;
+            }
+
+            let caught;
+            try {
+                new CustomElement().with({ a: 0, b: 0, c: 0 }).serialize();
+            } catch (e) {
+                caught = e;
+            }
+
+            expect(caught).to.exist;
+        });
+        it('throws when the length determinant throws while reading', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(i => { throw new Error('uh oh'); }) a : number;
+            }
+
+            let caught;
+            try {
+                CustomElement.deserialize(Buffer.from([]));
+            } catch (e) {
+                caught = e;
+            }
+
+            expect(caught).to.exist;
+            expect(caught.message).to.contain('uh oh');
+        });
+        it('throws when the length determinant throws while writing', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(i => { throw new Error('uh oh'); }) a : number;
+            }
+
+            let caught;
+            try {
+                new CustomElement().with({ a: 123 }).serialize();
+            } catch (e) {
+                caught = e;
+            }
+
+            expect(caught).to.exist;
+            expect(caught.message).to.contain('uh oh');
+        });
+        it('writes undefined as zero', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) a = 123;
+                @Field(8) b : number;
+                @Field(8) c = 22;
+            }
+
+            let buf = new CustomElement().with({ b: undefined }).serialize();
+
+            expect(Array.from(buf)).to.eql([ 123, 0, 22 ]);
+        });
+        it('writes null as zero', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) a = 123;
+                @Field(8) b : number;
+                @Field(8) c = 22;
+            }
+
+            let buf = new CustomElement().with({ b: null }).serialize();
+
+            expect(Array.from(buf)).to.eql([ 123, 0, 22 ]);
+        });
+    });
+    describe(': Booleans', it => {
+        it('has the correct default behavior while reading', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : boolean;
+                @Field(8) b : boolean;
+                @Field(8) c : boolean;
+                @Field(8) d : boolean;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([ 0, 1, 2, 0 ]));
+
+            expect(element.a).to.equal(false);
+            expect(element.b).to.equal(true);
+            expect(element.c).to.equal(true);
+            expect(element.d).to.equal(false);
+        });
+        it('respects the chosen true/false values when reading with default mode', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { boolean: { true: 0, false: 1 }}) a : boolean;
+                @Field(8, { boolean: { true: 0, false: 1 }}) b : boolean;
+                @Field(8, { boolean: { true: 0, false: 1 }}) c : boolean;
+                @Field(8, { boolean: { true: 0, false: 1 }}) d : boolean;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([ 0, 1, 2, 0 ]));
+
+            expect(element.a).to.equal(true);
+            expect(element.b).to.equal(false);
+            expect(element.c).to.equal(true);
+            expect(element.d).to.equal(true);
+        });
+        it('respects the chosen true/false values when reading with mode=false-unless', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'false-unless' }}) a : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'false-unless' }}) b : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'false-unless' }}) c : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'false-unless' }}) d : boolean;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([ 0, 1, 2, 0 ]));
+
+            expect(element.a).to.equal(true);
+            expect(element.b).to.equal(false);
+            expect(element.c).to.equal(false);
+            expect(element.d).to.equal(true);
+        });
+        it('respects the chosen true/false values when reading with mode=true-unless', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'true-unless' }}) a : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'true-unless' }}) b : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'true-unless' }}) c : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'true-unless' }}) d : boolean;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([ 0, 1, 2, 0 ]));
+
+            expect(element.a).to.equal(true);
+            expect(element.b).to.equal(false);
+            expect(element.c).to.equal(true);
+            expect(element.d).to.equal(true);
+        });
+        it('respects the chosen true/false values when reading with mode=undefined', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'undefined' }}) a : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'undefined' }}) b : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'undefined' }}) c : boolean;
+                @Field(8, { boolean: { true: 0, false: 1, mode: 'undefined' }}) d : boolean;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([ 0, 1, 2, 0 ]));
+
+            expect(element.a).to.equal(true);
+            expect(element.b).to.equal(false);
+            expect(element.c).to.be.undefined;
+            expect(element.d).to.equal(true);
+        });
+        it('behaves correctly with mode=undefined', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { boolean: { mode: 'undefined' }}) a : boolean;
+                @Field(8, { boolean: { mode: 'undefined' }}) b : boolean;
+                @Field(8, { boolean: { mode: 'undefined' }}) c : boolean;
+                @Field(8, { boolean: { mode: 'undefined' }}) d : boolean;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([ 0, 1, 2, 0 ]));
+
+            expect(element.a).to.equal(false);
+            expect(element.b).to.equal(true);
+            expect(element.c).to.be.undefined;
+            expect(element.d).to.equal(false);
+        });
+        it('has the correct default behavior while writing', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : boolean;
+                @Field(8) b : boolean;
+                @Field(8) c : boolean;
+                @Field(8) d : boolean;
+            }
+
+            let buffer = new CustomElement().with({ a: true, b: false, c: true, d: false }).serialize();
+            expect(Array.from(buffer)).to.eql([ 1, 0, 1, 0 ]);
+        });
+        it('respects the chosen undefined value while writing', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8, { boolean: { undefined: 99 }}) a : boolean;
+                @Field(8, { boolean: { undefined: 99 }}) b : boolean;
+                @Field(8, { boolean: { undefined: 99 }}) c : boolean;
+                @Field(8, { boolean: { undefined: 99 }}) d : boolean;
+            }
+
+            let buffer = new CustomElement().with({ a: true, b: false, c: undefined, d: false }).serialize();
+            expect(Array.from(buffer)).to.eql([ 1, 0, 99, 0 ]);
+        });
+    });
     describe(': Byte Arrays', it => {
         it('understands Buffer when length is a multiple of 8', async () => {
             class CustomElement extends BitstreamElement {
@@ -138,6 +455,184 @@ describe('BitstreamElement', it => {
             expect(element.c[0]).to.equal(0b10101100);
             expect(element.c[1]).to.equal(0b00101000);
         });
+        it('uses Uint8Array when requested even if Buffer is available', async () => {
+            class CustomElement extends BitstreamElement {
+                @Field(4) a;
+                @Field(4) b;
+                @Field(16) c : Uint8Array;
+            }
+    
+            //            |---|---|---------------X
+            let value = 0b11010110101011000010100000000000;
+            let buffer = Buffer.alloc(4);
+            buffer.writeUInt32BE(value);
+    
+            let bitstream = new BitstreamReader();
+            bitstream.addBuffer(buffer);
+    
+            let element = await CustomElement.readBlocking(bitstream);
+
+            expect(element.a).to.equal(0b1101);
+            expect(element.b).to.equal(0b0110);
+            expect(element.c).to.be.instanceOf(Uint8Array);
+            expect(element.c.length).to.equal(2);
+            expect(element.c[0]).to.equal(0b10101100);
+            expect(element.c[1]).to.equal(0b00101000);
+        });
+        it('uses Uint8Array when Buffer is not available', async () => {
+
+            const BufferT = Buffer;
+
+            (globalThis as any).Buffer = undefined;
+
+            try {
+                class CustomElement extends BitstreamElement {
+                    @Field(4) a;
+                    @Field(4) b;
+                    @Field(16) c : Uint8Array;
+                }
+        
+                //            |---|---|---------------X
+                let value = 0b11010110101011000010100000000000;
+                let buffer = new ArrayBuffer(4);
+                let view = new DataView(buffer);
+                view.setUint32(0, value);
+        
+                let bitstream = new BitstreamReader();
+                bitstream.addBuffer(new Uint8Array(buffer));
+        
+                let element = await CustomElement.readBlocking(bitstream);
+
+                expect(element.a).to.equal(0b1101);
+                expect(element.b).to.equal(0b0110);
+                expect(element.c).to.be.instanceOf(Uint8Array);
+                expect(element.c.length).to.equal(2);
+                expect(element.c[0]).to.equal(0b10101100);
+                expect(element.c[1]).to.equal(0b00101000);
+            } finally {
+                (globalThis as any).Buffer = BufferT;
+            }
+        });
+        it('writes fixed size Buffer correctly', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*4) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(4);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4]);
+        });
+        it('truncates Buffer to fixed length by default', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(4*8) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4,5,6,7,8])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(4);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4]);
+        });
+        it('does not truncate Buffer when larger than fixed length and truncate=false', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*4, { buffer: { truncate: false }}) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4,5,6,7,8])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(8);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4,5,6,7,8]);
+        });
+        it('does not truncate Buffer when larger than fixed length and truncate=false', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*4, { buffer: { truncate: false }}) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4,5,6,7,8])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(8);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4,5,6,7,8]);
+        });
+        it('writes full declared size when Buffer is shorter', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*8) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(8);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4,0,0,0,0]);
+        });
+        it('does not write full declared size when Buffer is shorter and truncate=false', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*8, { buffer: { truncate: false }}) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(4);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4]);
+        });
+        it('uses the specified `fill` value when Buffer is shorter', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*8, { buffer: { fill: 135 }}) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(8);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4,135,135,135,135]);
+        });
+        it('uses the specified `fill` value when Buffer is shorter and truncate=false', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*8, { buffer: { truncate: false, fill: 135 }}) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(8);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4,135,135,135,135]);
+        });
+        it('still truncates the buffer length when `fill` is set but `truncate` is true (as default)', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(4*8, { buffer: { fill: 135 }}) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4,5,6,7,8])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(4);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4]);
+        });
+        it('still truncates the buffer length when `fill` is set but `truncate` is true (explicitly)', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(4*8, { buffer: { truncate: true, fill: 135 }}) buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([1,2,3,4,5,6,7,8])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(4);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4]);
+        });
         it('fails when Buffer field has non multiple-of-8 length', () => {
             let caught : Error;
     
@@ -153,9 +648,47 @@ describe('BitstreamElement', it => {
     
             expect(caught, 'should have thrown an error').to.exist;
         });
+        it('throws when length determinant throws during read', () => {
+            let caught : Error;
+    
+            try {
+                class CustomElement extends BitstreamElement {
+                    @Field(4) a;
+                    @Field(4) b;
+                    @Field(i => { throw new Error('uh oh'); }) c : Buffer;
+                }
+
+                CustomElement.deserialize(Buffer.alloc(16));
+
+            } catch (e) {
+                caught = e;
+            }
+    
+            expect(caught, 'should have thrown an error').to.exist;
+            expect(caught.message).to.contain('uh oh');
+        });
+        it('throws when length determinant throws during write', () => {
+            let caught : Error;
+    
+            try {
+                class CustomElement extends BitstreamElement {
+                    @Field(4) a;
+                    @Field(4) b;
+                    @Field(i => { throw new Error('uh oh'); }) c : Buffer;
+                }
+
+                new CustomElement().with({ a: 0, b: 1, c: Buffer.alloc(1) }).serialize();
+
+            } catch (e) {
+                caught = e;
+            }
+    
+            expect(caught, 'should have thrown an error').to.exist;
+            expect(caught.message).to.contain('uh oh');
+        });
     });
     describe(': Strings', it => {
-        it('parse correctly', async () => {
+        it('are read correctly', async () => {
             class CustomElement extends BitstreamElement {
                 @Field(4) a;
                 @Field(4) b;
@@ -171,6 +704,24 @@ describe('BitstreamElement', it => {
             expect(element.a).to.equal(0b1101);
             expect(element.b).to.equal(0b0110);
             expect(element.c).to.equal('hello');
+        });
+        it('are written correctly', async () => {
+            class CustomElement extends BitstreamElement {
+                @Field(5) c : string;
+            }
+    
+            let buf = Buffer.from(new CustomElement().with({ c: 'hello' }).serialize());
+            
+            expect(buf.toString('utf-8')).to.equal('hello');
+        });
+        it('are written correctly (utf16le)', async () => {
+            class CustomElement extends BitstreamElement {
+                @Field(10, { string: { encoding: 'utf16le' }}) c : string;
+            }
+    
+            let buf = Buffer.from(new CustomElement().with({ c: 'hello' }).serialize());
+            
+            expect(buf.toString('utf16le')).to.equal('hello');
         });
     });
     describe(': Fields', it => {
@@ -237,6 +788,127 @@ describe('BitstreamElement', it => {
             expect(caught).to.exist;
         });
     });
+    describe(': Element Fields', it => {
+        it('reads nested element fields correctly', () => {
+            class Child2Element extends BitstreamElement {
+                @Field(8) byte;
+            }
+            class ChildElement extends BitstreamElement {
+                @Field() child : Child2Element;
+            }
+            class CustomElement extends BitstreamElement {
+                @Field() child : ChildElement;
+            }
+
+            let element = CustomElement.deserialize(Buffer.from([ 8 ]));
+
+            expect(element.child).to.be.instanceOf(ChildElement);
+            expect(element.child.child).to.be.instanceOf(Child2Element);
+            expect(element.child.child.byte).to.equal(8);
+        });
+        it('writes nested element fields correctly', () => {
+            class Child2Element extends BitstreamElement {
+                @Field(8) byte;
+            }
+            class ChildElement extends BitstreamElement {
+                @Field() child : Child2Element;
+            }
+            class CustomElement extends BitstreamElement {
+                @Field() child : ChildElement;
+            }
+
+            let buf = new CustomElement().with({ 
+                child: new ChildElement().with({ 
+                    child: new Child2Element().with({ 
+                        byte: 101 
+                    })
+                })
+            }).serialize();
+
+            expect(buf.length).to.equal(1);
+            expect(buf[0]).to.equal(101);
+        });
+        it('throws when nested element is null', () => {
+            class Child2Element extends BitstreamElement {
+                @Field(8) byte;
+            }
+            class ChildElement extends BitstreamElement {
+                @Field() child : Child2Element;
+            }
+            class CustomElement extends BitstreamElement {
+                @Field() child : ChildElement;
+            }
+
+            let caught;
+            try {
+                new CustomElement().with({ 
+                    child: null
+                }).serialize();
+            } catch (e) { caught = e; }
+
+            expect(caught).to.exist;
+        });
+        it('throws when nested element is undefined', () => {
+            class Child2Element extends BitstreamElement {
+                @Field(8) byte;
+            }
+            class ChildElement extends BitstreamElement {
+                @Field() child : Child2Element;
+            }
+            class CustomElement extends BitstreamElement {
+                @Field() child : ChildElement;
+            }
+
+            let caught;
+            try {
+                new CustomElement().with({ 
+                    child: undefined
+                }).serialize();
+            } catch (e) { caught = e; }
+
+            expect(caught).to.exist;
+        });
+        it('throws when nested element is the wrong type of object', () => {
+            class Child2Element extends BitstreamElement {
+                @Field(8) byte;
+            }
+            class ChildElement extends BitstreamElement {
+                @Field() child : Child2Element;
+            }
+            class CustomElement extends BitstreamElement {
+                @Field() child : ChildElement;
+            }
+
+            let caught;
+            try {
+                new CustomElement().with({ 
+                    child: <any>{ }
+                }).serialize();
+            } catch (e) { caught = e; }
+
+            expect(caught).to.exist;
+        });
+        it('throws when nested element is a string', () => {
+            class Child2Element extends BitstreamElement {
+                @Field(8) byte;
+            }
+            class ChildElement extends BitstreamElement {
+                @Field() child : Child2Element;
+            }
+            class CustomElement extends BitstreamElement {
+                @Field() child : ChildElement;
+            }
+
+            let caught;
+            try {
+                new CustomElement().with({ 
+                    child: <any>'hello'
+                }).serialize();
+            } catch (e) { caught = e; }
+
+            expect(caught).to.exist;
+        });
+    });
     describe(': Arrays', it => {
         it('should throw when used without specifying array: { type }', () => {
             
@@ -296,12 +968,16 @@ describe('BitstreamElement', it => {
                 let bitstream = new BitstreamReader();
                 bitstream.addBuffer(Buffer.from([ 12, 34, 56, 78, 0 ]));
         
+                let caught;
+
                 try {
                     await CustomElement.readBlocking(bitstream);
-                    throw new Error(`Expected throw`);
                 } catch (e) { 
-                    expect(e.message).to.contain('uh oh');
+                    caught = e;
                 }
+                
+                expect(caught).to.exist;
+                expect(caught.message).to.contain('uh oh');
             });
             it('hasMore should be able to observe the array being built', async () => {
                 class CustomElement extends BitstreamElement {
@@ -334,10 +1010,12 @@ describe('BitstreamElement', it => {
                     0,0,0,0
                 ]));
         
+                let caught;
                 try {
                     await CustomElement.readBlocking(bitstream);
-                    throw new Error(`Expected throw`);
-                } catch (e) { }
+                } catch (e) { caught = e; }
+
+                expect(caught).to.exist;
             });
             it(': unsigned integers', async () => {
                 class CustomElement extends BitstreamElement {
@@ -606,6 +1284,201 @@ describe('BitstreamElement', it => {
     
             CustomElement.deserialize(Buffer.alloc(1));
             expect(passed.whoAmI()).to.equal('variant');
+        });
+    });
+    describe(': Variation', it => {
+        it('corrects the select tail variant while reading', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+            }
+
+            @Variant(i => i.type === 1)
+            class Type1 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            @Variant(i => i.type === 2)
+            class Type2 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            let element : CustomElement;
+            
+            element = CustomElement.deserialize(Buffer.from([ 1, 123 ]));
+            expect(element).to.be.an.instanceOf(Type1);
+            expect(element.as(Type1).value).to.equal(123);
+
+            element = CustomElement.deserialize(Buffer.from([ 2, 34 ]));
+            expect(element).to.be.an.instanceOf(Type2);
+            expect(element.as(Type2).value).to.equal(34);
+        });
+        it('corrects the select marker variant while reading', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @VariantMarker() $variantMarker;
+                @Field(8) suffix : number;
+            }
+
+            @Variant(i => i.type === 1)
+            class Type1 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            @Variant(i => i.type === 2)
+            class Type2 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            let element : CustomElement;
+            
+            element = CustomElement.deserialize(Buffer.from([ 1, 123, 111 ]));
+            expect(element).to.be.an.instanceOf(Type1);
+            expect(element.as(Type1).value).to.equal(123);
+            expect(element.as(Type1).suffix).to.equal(111);
+
+            element = CustomElement.deserialize(Buffer.from([ 2, 22, 112 ]));
+            expect(element).to.be.an.instanceOf(Type2);
+            expect(element.as(Type2).value).to.equal(22);
+            expect(element.as(Type2).suffix).to.equal(112);
+        });
+        it('respects the priority option', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @VariantMarker() $variantMarker;
+                @Field(8) suffix : number;
+            }
+
+            @Variant(i => true, { priority: 1 })
+            class Type1 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            @Variant(i => true, { priority: 0 })
+            class Type2 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            let element : CustomElement;
+            
+            element = CustomElement.deserialize(Buffer.from([ 2, 22, 112 ]));
+            expect(element).to.be.an.instanceOf(Type2);
+            expect(element.as(Type2).value).to.equal(22);
+            expect(element.as(Type2).suffix).to.equal(112);
+        });
+        it('uses @DefaultVariant() as a last resort', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @VariantMarker() $variantMarker;
+                @Field(8) suffix : number;
+            }
+
+            @DefaultVariant()
+            class Type1 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            @Variant(i => i.type === 2, { priority: 0 })
+            class Type2 extends CustomElement {
+                @Field(8) value : number;
+            }
+
+            let element : CustomElement;
+            
+            element = CustomElement.deserialize(Buffer.from([ 2, 22, 112 ]));
+            expect(element).to.be.an.instanceOf(Type2);
+            expect(element.as(Type2).value).to.equal(22);
+            expect(element.as(Type2).suffix).to.equal(112);
+
+            element = CustomElement.deserialize(Buffer.from([ 1, 22, 112 ]));
+            expect(element).to.be.an.instanceOf(Type1);
+            expect(element.as(Type1).value).to.equal(22);
+            expect(element.as(Type1).suffix).to.equal(112);
+        });
+    });
+    describe(': Serialization', it => {
+        it('supports partial serialization', () => {
+            
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+                @Field(8) c : number;
+                @Field(8) d : number;
+            }
+
+            let buf = new CustomElement().with({ a: 1, b: 2, c: 3, d: 4 }).serialize('b', 'c');
+            expect(Array.from(buf)).to.eql([ 2, 3 ]);
+
+            buf = new CustomElement().with({ a: 1, b: 2, c: 3, d: 4 }).serialize('a', 'c');
+            expect(Array.from(buf)).to.eql([ 1, 2, 3 ]);
+        });
+        it('partial serialization supports type-safe references', () => {
+            
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+                @Field(8) c : number;
+                @Field(8) d : number;
+            }
+
+            let buf = new CustomElement().with({ a: 1, b: 2, c: 3, d: 4 }).serialize(i => i.b, i => i.c);
+            expect(Array.from(buf)).to.eql([ 2, 3 ]);
+
+            buf = new CustomElement().with({ a: 1, b: 2, c: 3, d: 4 }).serialize(i => i.a, i => i.c);
+            expect(Array.from(buf)).to.eql([ 1, 2, 3 ]);
+        });
+    });
+    describe(': Measurement', it => {
+        it('can measure an element with static field sizes', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @Field(8) value : number;
+                @Field(8) suffix : number;
+            }
+
+            expect(new CustomElement().measure()).to.equal(24);
+        });
+        it('takes determinants into account', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @Field(i => i.type === 1 ? 8 : 16) value : number;
+                @Field(8) suffix : number;
+            }
+
+            let element = new CustomElement().with({ type: 1, value: 123, suffix: 117});
+
+            expect(element.measure()).to.equal(24);
+            element.type = 2;
+            expect(element.measure()).to.equal(32);
+        });
+        it('correctly computes partial measurements', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @Field(16) value : number;
+                @Field(16) value2 : number;
+                @Field(8) suffix : number;
+            }
+
+            let element = new CustomElement();
+
+            expect(element.measure('type', 'value')).to.equal(24);
+            expect(element.measure('value', 'value2')).to.equal(32);
+            expect(element.measure('value', 'suffix')).to.equal(40);
+            expect(element.measure('value2', 'suffix')).to.equal(24);
+        });
+        it('supports type-safe field references', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) type : number;
+                @Field(16) value : number;
+                @Field(16) value2 : number;
+                @Field(8) suffix : number;
+            }
+
+            let element = new CustomElement();
+
+            expect(element.measure(i => i.type, i => i.value)).to.equal(24);
+            expect(element.measure(i => i.value, i => i.value2)).to.equal(32);
+            expect(element.measure(i => i.value, i => i.suffix)).to.equal(40);
+            expect(element.measure(i => i.value2, i => i.suffix)).to.equal(24);
         });
     });
     describe(': Context', it => {

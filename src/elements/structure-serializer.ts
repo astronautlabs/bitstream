@@ -18,9 +18,9 @@ export class StructureSerializer implements Serializer {
         }
     }
     
-    async write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: BitstreamElement) {
+    write(writer: BitstreamWriter, type : any, instance: any, field: FieldDefinition, value: BitstreamElement) {
         if (!value)
             throw new Error(`Cannot write ${field.type.name}#${String(field.name)}: Value is null/undefined`);
-        await value.write(writer, { skip: field.options?.skip });
+        value.write(writer, { skip: field.options?.skip });
     }
 }

@@ -214,10 +214,12 @@ You can customize this behavior using the boolean field options (ie `@Field(8, {
 - `false`: The numeric value to use for `false` (default `0`)
 - `undefined`: The numeric value to use when writing `undefined` (default `0`)
 - `mode`: How to handle novel inputs when reading:
-    - `"true-unless"`: The value is true unless the numeric value chosen for 'false' is observed
-    - `"false-unless"`: The value is false unless the numeric value chosen for 'true' is observed (default mode)
+    - `"true-unless"`: The value is true unless the numeric value chosen for 'false' is observed (default mode). For 
+       example `0` is `false`, `1` is `true`, `100` is `true`
+    - `"false-unless"`: The value is false unless the numeric value chosen for 'true' is observed. For example
+       `0` is `false`, `1` is `true`, `100` is `false`
     - `"undefined"`: The value is `true` if the numeric value for 'true' is observed, `false` if the numeric value for 
-      'false' is observed and `undefined` otherwise. 
+      'false' is observed and `undefined` otherwise. For example `0` is `false`, `1` is `true`, `100` is `undefined`.
 
 If none of these options fit your use case, you can write a custom `Serializer`.
 

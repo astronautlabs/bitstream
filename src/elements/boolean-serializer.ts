@@ -16,11 +16,11 @@ export class BooleanSerializer implements Serializer {
         const numericValue = reader.readSync(length);
         const trueValue = field?.options?.boolean?.true ?? 1;
         const falseValue = field?.options?.boolean?.false ?? 0;
-        const mode = field?.options?.boolean?.mode || 'false-unless';
+        const mode = field?.options?.boolean?.mode ?? 'true-unless';
         
-        if (mode === 'false-unless')
+        if (mode === 'true-unless')
             return numericValue !== falseValue;
-        else if (mode === 'true-unless')
+        else if (mode === 'false-unless')
             return numericValue === trueValue;
         else if (mode === 'undefined')
             return numericValue === trueValue ? true : numericValue === falseValue ? false : undefined;

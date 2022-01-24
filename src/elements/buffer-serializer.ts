@@ -38,23 +38,32 @@ import { resolveLength } from "./resolve-length";
         let length : number;
 
         try {
-            length = resolveLength(field.length, parent, field) / 8
+            length = resolveLength(field.length, parent, field) / 8;
         } catch (e) {
             throw new Error(`Failed to resolve length for buffer via 'length': ${e.message}`);
         }
 
         let fieldLength = Math.floor(length);
+        let truncate = field.options?.buffer?.truncate ?? true;
+        let fill = field.options?.buffer?.fill ?? (truncate ? 0 : false);
 
-        if (field.options?.buffer?.truncate === false) {
-            writer.writeBuffer(value);
-        } else {
-            if (value.length > fieldLength) {
-                writer.writeBuffer(value.subarray(0, resolveLength(field.length, parent, field)));
-            } else {
-                writer.writeBuffer(value);
-                if (value.length < fieldLength)
-                    writer.writeBuffer(new Uint8Array(fieldLength - value.length));
+        if (value.length > fieldLength) {
+            if (truncate) {
+                writer.writeBuffer(value.subarray(0, fieldLength));
+                return;
+            }
+        } else if (value.length < fieldLength) {
+            if (fill !== false) {
+                let filledBuffer = new Uint8Array(fieldLength).fill(fill);
+
+                for (let i = 0, max = value.length; i < max; ++i)
+                    filledBuffer[i] = value[i];
+                
+                writer.writeBuffer(filledBuffer);
+                return;
             }
         }
+
+        writer.writeBuffer(value);
     }
 }
