@@ -7,3 +7,4 @@ dist/test.js
 dist/**/*.test.js
 src/benchmark.ts
 dist/benchmark.js
+scripts/**
