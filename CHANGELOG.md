@@ -20,6 +20,7 @@ Breaking changes:
   previously would read zero numbers and now it will read three.
 - hasMore() now accepts the `array` being built so that analyzing the values read prior can influence the result. The 
   `instance` and `parent` parameters are still present and follow the `array`.
+  
 # v2.1.1
 - Fix: `@ReservedLow` should actually emit low bits 
 
