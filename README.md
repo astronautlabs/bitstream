@@ -46,7 +46,7 @@ await reader.read(4); // == 0b0001
 await reader.read(7); // == 0b0001111
 ```
 
-The above will write the values as unsigned integers in big-endian (network byte order) format.
+The above will read the values as unsigned integers in big-endian (network byte order) format.
 
 ## Asynchronous versus Synchronous
 
@@ -498,7 +498,7 @@ class Type2Element extends BaseElement {
 
     get count() { return this.items?.length ?? this.$count; }
 
-    @Field(i => i.count, { array: { type: Number, elementLength: 8 }})
+    @Field(i => i.$count, { array: { type: Number, elementLength: 8 }})
     private $items : number[];
 
     get items() { return this.items; }
