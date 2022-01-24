@@ -1761,6 +1761,25 @@ describe('BitstreamElement', it => {
 
             expect(new CustomElement().measure()).to.equal(24);
         });
+        it('can be used in a determinant', () => {
+            class CustomElement extends BitstreamElement {
+                @Field(8) a : number;
+                @Field(8) b : number;
+                @Field((i : CustomElement) => i.measure()) c : number;
+                @Field(8) d : number;
+            }
+
+            let buf = new CustomElement().with({ a: 11, b: 22, c: 33, d: 44 }).serialize();
+
+            expect(Array.from(buf)).to.eql([11, 22, 0, 33, 44]);
+
+            let element = CustomElement.deserialize(Buffer.from([11, 22, 0, 33, 44]));
+
+            expect(element.a).to.equal(11);
+            expect(element.b).to.equal(22);
+            expect(element.c).to.equal(33);
+            expect(element.d).to.equal(44);
+        });
         it('measureFrom() works as expected', () => {
             class CustomElement extends BitstreamElement {
                 @Field(8) type : number;
