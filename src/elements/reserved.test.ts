@@ -16,6 +16,17 @@ describe('@Reserved()', it => {
 
         expect(Array.from(buf)).to.eql([ 123, 255, 122]);
     });
+    it('supports determinants', () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) a : number;
+            @Reserved(i => 8) reserved : number;
+            @Field(8) b : number;
+        }
+
+        let buf = new CustomElement().with({ a: 123, reserved: 111, b: 122 }).serialize();
+
+        expect(Array.from(buf)).to.eql([ 123, 255, 122]);
+    });
     it('is never read', () => {
         class CustomElement extends BitstreamElement {
             @Field(8) a : number;

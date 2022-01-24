@@ -216,7 +216,7 @@ export class BitstreamElement {
         let length = this.measure(fromRef, toRef);
 
         if (!autoPad && length % 8 !== 0)
-            throw new Error(`Cannot serialize ${length} bits evenly into ${Math.ceil(length / 8)} bytes`);
+            throw new Error(`${length} bits (${Math.floor(length / 8)} bytes + ${length % 8} bits) is not an even amount of bytes!`);
 
         for (let i = fromIndex, max = toIndex; i <= max; ++i) {
             let field = this.syntax[i];
@@ -957,6 +957,9 @@ export class BitstreamElement {
                 if (options.field?.options?.skip && options.field.options.skip.includes(f.name))
                     return;
 
+                if (options.skip && options.skip.includes(f.name))
+                    return;
+
                 if (options.elementBeingVariated.syntax.some(x => x.name === f.name) && options.elementBeingVariated.readFields.includes(f.name)) {
                     if (!f.options.isIgnored)
                         element[f.name] = options.elementBeingVariated[f.name];
@@ -978,7 +981,7 @@ export class BitstreamElement {
                 }
             }
         } else {
-            let g = element.read(reader, { skip: options.field?.options?.skip });
+            let g = element.read(reader, { skip: [...(options.skip ?? []), ...(options.field?.options?.skip ?? [])] });
             while (true) {
                 let result = g.next();
                 if (result.done === false) {

@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import "zone.js";
 import "reflect-metadata";
 import "source-map-support/register";

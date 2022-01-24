@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import { Field } from "./field";
 
 /**

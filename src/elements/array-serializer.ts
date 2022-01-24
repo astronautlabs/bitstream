@@ -166,8 +166,16 @@ export class ArraySerializer implements Serializer {
         }
 
         for (let i = 0; i < length; ++i) {
-            if (field.options.array.type === Number) { 
-                writer.write(field.options.array.elementLength, value[i]);
+            if (field?.options?.array?.type === Number) { 
+                let type = field.options?.number?.format ?? 'unsigned';
+
+                if (type === 'unsigned')
+                    writer.write(field.options.array.elementLength, value[i]);
+                else if (type === 'signed')
+                    writer.writeSigned(field.options.array.elementLength, value[i]);
+                else if (type === 'float')
+                    writer.writeFloat(field.options.array.elementLength, value[i]);
+                
             } else {
                 value[i].write(writer);
             }

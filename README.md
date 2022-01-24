@@ -590,7 +590,7 @@ alert you if you reference a field that doesn't exist on `Type2Element`.
 There is also `@Reserved(length)` which can be used in place of `@Field(length)`. This decorator marks a field as 
 taking up space in the bitstream, but ignores the value in the object instance when reading/writing. Instead the value 
 is always high bits. That is, a field marked with `@Reserved(8)` will always be written as `0xFF` (`0b11111111`). This 
-can be useful for standards which specify that reserved space should be filled with high bits. `@LowReserved()` is also 
+can be useful for standards which specify that reserved space should be filled with high bits. `@ReservedLow()` is also 
 provided which will do the opposite- filling the covered bits with all zeroes. 
 
 Other schemes can be accomodated with custom decorators. For instance:

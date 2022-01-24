@@ -1,4 +1,4 @@
-import { countReset } from 'console';
+/* istanbul ignore file */
 import { Readable } from 'stream';
 import { BitstreamReader } from './bitstream';
 export class FPSCounter {
