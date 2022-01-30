@@ -234,8 +234,10 @@ export class BitstreamElement {
             try {
                 field.options.serializer.write(writer, field.type, this, field, writtenValue);
             } catch (e) {
-                console.error(`Failed to write field ${field.type.name}#${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
-                console.error(e);
+                if (globalThis.BITSTREAM_TRACE !== false) {
+                    console.error(`Failed to write field ${field.type.name}#${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
+                    console.error(e);
+                }
                 throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
             }
         }
@@ -737,8 +739,10 @@ export class BitstreamElement {
             try {
                 element.options.serializer.write(bitstream, element.type, this, element, writtenValue);
             } catch (e) {
-                console.error(`Failed to write field ${element.type.name}#${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
-                console.error(e);
+                if (globalThis.BITSTREAM_TRACE !== false) {
+                    console.error(`Failed to write field ${element.type.name}#${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
+                    console.error(e);
+                }
                 throw new Error(`Failed to write field ${String(element.name)} using ${element.options.serializer.constructor.name}: ${e.message}`);
             }
         }
