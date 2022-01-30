@@ -201,6 +201,8 @@ export class BitstreamElement {
             }
         }
 
+        this.context = {};
+
         let from = this.selectField(fromRef);
         let to = this.selectField(toRef);
         let fromIndex = this.syntax.findIndex(x => x === from);
@@ -862,6 +864,7 @@ export class BitstreamElement {
      * @param options Options which modify how the element is written. Most notably this lets you skip specific fields
      */
     write(bitstream : BitstreamWriter, options? : SerializeOptions) {
+        this.context = options?.context ?? {};
         this.onSerializeStarted();
         this.writeGroup(bitstream, '*', options);
         this.onSerializeFinished();

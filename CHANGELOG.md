@@ -1,6 +1,7 @@
 # vNext
 
 - The current reader offset is now reported when the buffer becomes exhausted during deserialization
+- Context is now set up correctly during write operations
 
 # v3.0.0
 
