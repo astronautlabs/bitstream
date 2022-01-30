@@ -18,6 +18,23 @@ export class BitstreamWriter {
     private pendingBits : number = 0;
     private buffer : Uint8Array;
     private bufferedBytes = 0;
+    private _offset = 0;
+
+    /**
+     * How many bits have been written via this writer in total
+     */
+    get offset() {
+        return this._offset;
+    }
+
+    /**
+     * How many bits into the current byte is the write cursor.
+     * If this value is zero, then we are currently byte-aligned.
+     * A value of 7 means we are 1 bit away from the byte boundary.
+     */
+    get byteOffset() {
+        return this.pendingBits;
+    }
 
     end() {
         this.finishByte();
@@ -112,6 +129,7 @@ export class BitstreamWriter {
 
             this.pendingByte = this.pendingByte | contribution;
             this.pendingBits += writtenLength;
+            this._offset += writtenLength;
             
             remainingLength -= writtenLength;
             valueN = valueN % BigInt(Math.pow(2, remainingLength));

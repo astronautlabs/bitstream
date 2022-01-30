@@ -215,11 +215,6 @@ export class BitstreamElement {
             throw new Error(`Cannot measure from field ${fromIndex} (${String(from.name)}) to ${toIndex} (${String(to.name)}): First field comes after last field`);
         }
 
-        let length = this.measure(fromRef, toRef);
-
-        if (!autoPad && length % 8 !== 0)
-            throw new Error(`${length} bits (${Math.floor(length / 8)} bytes + ${length % 8} bits) is not an even amount of bytes!`);
-
         for (let i = fromIndex, max = toIndex; i <= max; ++i) {
             let field = this.syntax[i];
 
@@ -243,6 +238,11 @@ export class BitstreamElement {
                 console.error(e);
                 throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
             }
+        }
+
+        if (writer.byteOffset !== 0) {
+            let length = writer.offset;
+            throw new Error(`${length} bits (${Math.floor(length / 8)} bytes + ${length % 8} bits) is not an even amount of bytes!`);
         }
 
         writer.end();

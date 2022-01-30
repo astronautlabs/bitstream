@@ -1,3 +1,10 @@
+# v3.0.3
+
+- Add `WritableStream#offset` and `WritableStream#byteOffset`
+- Eliminate use of `BitstreamElement#measure()` within `BitstreamElement#serialize()`. This produces more predictable
+  behavior for lifecycle hooks, is more performant and ensures only one `write()` call is needed per `serialize()` 
+  call
+
 # v3.0.2
 
 - Context is now shared between owner of array and array elements during write operations
