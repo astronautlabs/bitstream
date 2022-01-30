@@ -177,7 +177,7 @@ export class ArraySerializer implements Serializer {
                     writer.writeFloat(field.options.array.elementLength, value[i]);
                 
             } else {
-                value[i].write(writer);
+                (value[i] as BitstreamElement).write(writer, { context: parent?.context });
             }
         }
     }

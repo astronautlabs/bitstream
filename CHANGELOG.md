@@ -1,3 +1,7 @@
+# v3.0.2
+
+- Context is now shared between owner of array and array elements during write operations
+
 # v3.0.1
 
 - The current reader offset is now reported when the buffer becomes exhausted during deserialization
