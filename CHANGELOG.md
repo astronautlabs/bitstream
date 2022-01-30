@@ -1,3 +1,7 @@
+# vNext
+
+- The current reader offset is now reported when the buffer becomes exhausted during deserialization
+
 # v3.0.0
 
 Features:

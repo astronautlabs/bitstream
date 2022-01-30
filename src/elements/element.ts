@@ -850,7 +850,7 @@ export class BitstreamElement {
         while (true) {
             let result = gen.next();
             if (result.done === false)
-                throw new Error(`Buffer exhausted when reading ${result.value} bits`);
+                throw new Error(`Buffer exhausted when reading ${result.value} bits at offset ${reader.offset}`);
             else
                 return result.value;
         }
