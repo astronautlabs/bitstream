@@ -240,7 +240,7 @@ export class BitstreamElement {
             }
         }
 
-        if (writer.byteOffset !== 0) {
+        if (writer.byteOffset !== 0 && !autoPad) {
             let length = writer.offset;
             throw new Error(`${length} bits (${Math.floor(length / 8)} bytes + ${length % 8} bits) is not an even amount of bytes!`);
         }
