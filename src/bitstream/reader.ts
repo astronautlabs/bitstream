@@ -220,6 +220,72 @@ export class BitstreamReader {
     }
 
     /**
+     * Read a number of bytes from the stream. Returns a generator that ends when the read is complete,
+     * and yields a number of *bytes* still to be read (not bits like in other read methods)
+     * 
+     * @param buffer The buffer/typed array to write to
+     * @param offset The offset into the buffer to write to. Defaults to zero
+     * @param length The length of bytes to read. Defaults to the length of the array (sans the offset)
+     */
+    *readBytes(buffer : Uint8Array, offset : number = 0, length? : number): Generator<number, any> {
+        length ??= buffer.length - offset;
+        
+        for (let i = offset, max = Math.min(buffer.length, offset+length); i < max; ++i) {
+            if (!this.isAvailable(8))
+                yield max - i;
+            
+            buffer[i] = this.readSync(8);
+        }
+
+        return buffer;
+    }
+
+    /**
+     * Read a number of bytes from the stream synchronously. If not enough bytes are available, an 
+     * exception is thrown.
+     * 
+     * @param buffer The buffer/typed array to write to
+     * @param offset The offset into the buffer to write to. Defaults to zero
+     * @param length The length of bytes to read. Defaults to the length of the array (sans the offset)
+     */
+    readBytesSync(buffer : Uint8Array, offset : number = 0, length? : number): Uint8Array {
+        length ??= buffer.length - offset;
+        let gen = this.readBytes(buffer, offset, length);
+
+        while (true) {
+            let result = gen.next();
+            if (result.done === false)
+                throw new Error(`underrun: Not enough bits are available (requested ${length} bytes)`);
+            else
+                break;
+        }
+
+        return buffer;
+    }
+
+    /**
+     * Read a number of bytes from the stream. Blocks and waits for more bytes if not enough bytes are available.
+     * 
+     * @param buffer The buffer/typed array to write to
+     * @param offset The offset into the buffer to write to. Defaults to zero
+     * @param length The length of bytes to read. Defaults to the length of the array (sans the offset)
+     */
+    async readBytesBlocking(buffer : Uint8Array, offset : number = 0, length? : number) {
+        length ??= buffer.length - offset;
+        let gen = this.readBytes(buffer, offset, length);
+
+        while (true) {
+            let result = gen.next();
+            if (result.done === false)
+                await this.assure(result.value*8);
+            else
+                break;
+        }
+
+        return buffer;
+    }
+
+    /**
      * Read a two's complement signed integer of the given bit length synchronously. If there are not
      * enough bits available, an error is thrown.
      * 

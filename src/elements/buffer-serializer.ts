@@ -24,11 +24,14 @@ import { resolveLength } from "./resolve-length";
         else
             buffer = new Uint8Array(length);
         
-        for (let i = 0, max = buffer.length; i < max; ++i) {
-            if (!reader.isAvailable(8))
-                yield 8;
-            
-            buffer[i] = reader.readSync(8);
+        let gen = reader.readBytes(buffer);
+
+        while (true) {
+            let result = gen.next();
+            if (result.done === false)
+                yield result.value*8;
+            else
+                break;
         }
 
         return buffer;

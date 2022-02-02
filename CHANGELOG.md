@@ -1,3 +1,9 @@
+# v3.0.4
+
+- Add `BitstreamReader#readBytes*()` and `BitstreamWriter#writeBytes()` for reading/writing a number 
+  of bytes into a buffer or typed array.
+- Deprecated `BitstreamWriter#writeBuffer()` in favor of `writeBytes()`
+
 # v3.0.3
 
 - Add `WritableStream#offset` and `WritableStream#byteOffset`

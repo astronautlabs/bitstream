@@ -628,4 +628,22 @@ describe('BitstreamReader', it => {
         setTimeout(() => bitstream.addBuffer(buf), 10);
         expect(await bitstream.readString(10)).to.equal('hello');
     });
+    it('.readBytes() reads a buffer correctly when the data is already available', async () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.from([ 12, 42, 15 ]);
+        bitstream.addBuffer(buf);
+
+        let buf2 = Buffer.alloc(3);
+        await bitstream.readBytesBlocking(buf2);
+        expect(Array.from(buf2)).to.eql([ 12, 42, 15 ]);
+    });
+    it('.readBytes() reads a buffer correctly when the data is already available', async () => {
+        let bitstream = new BitstreamReader();
+        let buf = Buffer.from([ 12, 42, 15 ]);
+        setTimeout(() => bitstream.addBuffer(buf), 10);
+
+        let buf2 = Buffer.alloc(3);
+        await bitstream.readBytesBlocking(buf2);
+        expect(Array.from(buf2)).to.eql([ 12, 42, 15 ]);
+    });
 });
