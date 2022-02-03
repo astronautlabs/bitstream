@@ -1,3 +1,6 @@
+# vNext
+- Fix: Crash during `serialize()` on element with no fields
+
 # v3.1.0
 
 - Add `allowExhaustion` option to `deserialize()`
