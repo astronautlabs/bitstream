@@ -1,5 +1,7 @@
-# vNext
+# v3.1.1
+
 - Fix: Crash during `serialize()` on element with no fields
+- Fix: backwards-compat: Keep providing `SerializeOptions` for compatibility
 
 # v3.1.0
 

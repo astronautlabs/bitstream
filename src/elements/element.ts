@@ -23,6 +23,11 @@ export interface CommonOptions {
 }
 
 /**
+ * @deprecated
+ */
+export interface SerializeOptions extends CommonOptions {}
+
+/**
  * These options are available on BitstreamElement#read*() operations (ie those which apply to an existing instance).
  */
 export interface ReadOptions<T = BitstreamElement> extends CommonOptions {
