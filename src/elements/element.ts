@@ -14,7 +14,7 @@ export type FieldRef<T> = string | symbol | ((exemplar : {
 /**
  * Specify options when serializing a value
  */
-export interface SerializeOptions {
+export interface CommonOptions {
     /**
      * Set of fields to skip while writing
      */
@@ -22,15 +22,43 @@ export interface SerializeOptions {
     context? : any;
 }
 
-export interface ReadOptions<T = BitstreamElement> extends SerializeOptions {
+/**
+ * These options are available on BitstreamElement#read*() operations (ie those which apply to an existing instance).
+ */
+export interface ReadOptions<T = BitstreamElement> extends CommonOptions {
     parent? : BitstreamElement;
     field? : FieldDefinition;
     variator? : () => Promise<T>;
 }
 
-export interface TypeReadOptions<T = BitstreamElement> extends ReadOptions<T> {
+/**
+ * These options are available on BitstreamElement.read*() operations (ie those which are static)
+ */
+export interface StaticReadOptions<T = BitstreamElement> extends ReadOptions<T> {
+    /**
+     * When true, the operation will complete as soon as there are not enough bits. This is not intended 
+     * to be used on data streamed in, but rather for situations where all the data for the entire read
+     * operation is already available (such as BitstreamElement.deserialize()).
+     * 
+     * If you are reading from a buffer using BitstreamElement.read() directly, you might consider 
+     * using deserialize() instead.
+     */
+    allowExhaustion? : boolean;
     elementBeingVariated? : BitstreamElement;
     params? : any[];
+}
+
+/**
+ * These options are available when using Element.deserialize().
+ */
+export interface DeserializeOptions<T = BitstreamElement> extends StaticReadOptions<T> {
+    /**
+     * When true, the deserialize() operation will succeed even if there are not enough bits 
+     * to satisfy the fields of the bitstream element. This is useful if there are optional trailing
+     * fields where you are expected to stop reading (but continue without error) if there is no more 
+     * data left.
+     */
+    allowExhaustion? : boolean;
 }
 
 /**
@@ -712,7 +740,7 @@ export class BitstreamElement {
      * @param options Options that modify how the group is written. Most notably this allows you to skip specific 
      *                  fields.
      */
-    protected writeGroup(bitstream : BitstreamWriter, name : string, options? : SerializeOptions) {
+    protected writeGroup(bitstream : BitstreamWriter, name : string, options? : CommonOptions) {
         let syntax = this.syntax;
         for (let element of syntax) {
             if (name !== '*' && element.options.group !== name)
@@ -758,7 +786,7 @@ export class BitstreamElement {
      * @returns The current instance, unless it was variated into a subclass instance, in which case it will be the 
      *                  variated subclass instance. Thus it is important to observe the result of this method.
      */
-    *read(bitstream : BitstreamReader, options? : SerializeOptions) {
+    *read(bitstream : BitstreamReader, options? : CommonOptions) {
         let g = this.readGroup(bitstream, '*', options);
         while (true) {
             let result = g.next();
@@ -780,7 +808,7 @@ export class BitstreamElement {
      * @returns The current instance, unless it was variated into a subclass instance, in which case it will be the 
      *                  variated subclass instance. Thus it is important to observe the result of this method.
      */
-    *readOwn(bitstream : BitstreamReader, options? : SerializeOptions) {
+    *readOwn(bitstream : BitstreamReader, options? : CommonOptions) {
         let g = this.readGroup(bitstream, '$*', options);
         while (true) {
             let result = g.next();
@@ -828,7 +856,7 @@ export class BitstreamElement {
     static async readBlocking<T extends typeof BitstreamElement>(
         this : T, 
         reader : BitstreamReader, 
-        options : TypeReadOptions = {}
+        options : StaticReadOptions = {}
     ) : Promise<InstanceType<T>> {
         let iterator = <Generator<number, InstanceType<T>>> this.read(reader, options);
         do {
@@ -849,7 +877,11 @@ export class BitstreamElement {
      * @param data 
      * @returns 
      */
-    static deserialize<T extends typeof BitstreamElement>(this : T, data : Uint8Array, options : TypeReadOptions = {}): InstanceType<T> {
+    static deserialize<T extends typeof BitstreamElement>(
+        this : T, 
+        data : Uint8Array, 
+        options : DeserializeOptions = {}
+    ): InstanceType<T> {
         let reader = new BitstreamReader();
         reader.addBuffer(data);
         let gen = this.read(reader, options);
@@ -867,7 +899,7 @@ export class BitstreamElement {
      * @param bitstream The writer to write to
      * @param options Options which modify how the element is written. Most notably this lets you skip specific fields
      */
-    write(bitstream : BitstreamWriter, options? : SerializeOptions) {
+    write(bitstream : BitstreamWriter, options? : CommonOptions) {
         this.context = options?.context ?? {};
         this.onSerializeStarted();
         this.writeGroup(bitstream, '*', options);
@@ -892,7 +924,7 @@ export class BitstreamElement {
      * @param generator 
      * @returns 
      */
-    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : TypeReadOptions = {}): InstanceType<T> {
+    static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : StaticReadOptions = {}): InstanceType<T> {
 
         let generator = this.read(reader, options);
         let result = generator.next();
@@ -908,7 +940,7 @@ export class BitstreamElement {
      * @param reader The reader to read from
      * @returns The result of the read operation if successful, or undefined if there was not enough bits to complete the operation.
      */
-    static tryRead<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : TypeReadOptions = {}): InstanceType<T> {
+    static tryRead<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : StaticReadOptions = {}): InstanceType<T> {
         let previouslyRetaining = reader.retainBuffers;
         let startOffset = reader.offset;
 
@@ -948,10 +980,11 @@ export class BitstreamElement {
     static *read<T extends typeof BitstreamElement>(
         this : T, 
         reader : BitstreamReader,
-        options : TypeReadOptions = {}
+        options : StaticReadOptions = {}
     ): Generator<number, InstanceType<T>> {
         options.context ??= {};
         let element : BitstreamElement = new (this as any)(...(options.params ?? []));
+        let allowExhaustion = options.allowExhaustion ?? false;
         element.context = options.context;
         element.onParseStarted(options.elementBeingVariated);
 
@@ -981,6 +1014,8 @@ export class BitstreamElement {
             while (true) {
                 let result = g.next();
                 if (result.done === false) {
+                    if (allowExhaustion)
+                        return <InstanceType<T>> element;
                     yield result.value;
                 } else {
                     element = result.value;
@@ -992,6 +1027,8 @@ export class BitstreamElement {
             while (true) {
                 let result = g.next();
                 if (result.done === false) {
+                    if (allowExhaustion)
+                        return <InstanceType<T>> element;
                     yield result.value;
                 } else {
                     element = result.value;
@@ -1009,6 +1046,8 @@ export class BitstreamElement {
             while (true) {
                 let result = g.next();
                 if (result.done === false) {
+                    if (allowExhaustion)
+                        return <InstanceType<T>> element;
                     yield result.value;
                 } else {
                     element = result.value;

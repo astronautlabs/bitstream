@@ -2116,11 +2116,21 @@ describe('BitstreamElement', it => {
                 expect(element.b4).to.equal(7);
             });
         });
-        // it('writeGroup()', () => {
-        //     throw new Error('TODO');
-        // })
-        // it('writeOwn()', () => {
-        //     throw new Error('TODO');
-        // })
+        it('supports allowing exhaustion when deserializing', () => {
+            class ContainerElement extends BitstreamElement {
+                @Field(8) byte : number;
+            }
+
+            class Container extends BitstreamElement {
+                @Field(0, { array: { type: ContainerElement, hasMore: i => true }})
+                elements : ContainerElement[];
+            }
+
+            let value = Container.deserialize(Buffer.from([0,1,2,3,4,5,6,7]), { allowExhaustion: true });
+
+            expect(value.elements.length).to.equal(8);
+            for (let i = 0, max = 8; i < max; ++i)
+                expect(value.elements[i].byte, `value at index ${i} should be ${i}`).to.equal(i);
+        });
     });
 })

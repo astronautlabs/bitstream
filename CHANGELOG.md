@@ -1,3 +1,7 @@
+# v3.1.0
+
+- Add `allowExhaustion` option to `deserialize()`
+
 # v3.0.4
 
 - Add `BitstreamReader#readBytes*()` and `BitstreamWriter#writeBytes()` for reading/writing a number 

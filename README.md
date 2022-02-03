@@ -671,6 +671,12 @@ secondElement.deserializeFrom(bitstreamReader, firstElement);
 Here, we are passing a previously decoded element into the `deserializeFrom()` of the element being deserialized. You 
 could pass any arbitrary data in this fashion, giving you flexibility in how you handle advanced serialization.
 
+### Allowing Exhaustion
+
+When using `BitstreamElement#deserialize()` to parse an element object from a byte array / buffer, you can use 
+`allowExhaustion` to suppress the exception when the available bits are exhausted and instead return the partially read
+object. This can be very useful for diagnostics or for cases where there are optional tailing fields.
+
 # Architecture
 
 ## Generators 
