@@ -711,7 +711,7 @@ export class BitstreamElement {
                                         , 4)
                                     } bits = ${this.leftPad(instance.measureTo(element.name), 4)} bits total] `
                                 + 
-                                `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} => ${displayedValue}`
+                                `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} <= ${displayedValue}`
                             );
                         } catch (e) {
                             console.log(`Error while tracing read operation for element ${String(element.name)}: ${e.message}`);
@@ -769,6 +769,34 @@ export class BitstreamElement {
                     writtenValue = element.options.writtenValue(this, element);
                 } else {
                     writtenValue = element.options.writtenValue;
+                }
+            }
+
+            if (globalThis.BITSTREAM_TRACE === true && !(bitstream instanceof BitstreamMeasurer)) {
+                let displayedValue = `${writtenValue}`;
+
+                if (typeof writtenValue === 'number') {
+                    displayedValue = `0x${writtenValue.toString(16)} [${writtenValue}]`;
+                }
+
+                try {
+                    console.log(
+                        `[ + ${
+                            this.leftPad(this.measureField(element.name), 4)
+                            } bit(s) = ${
+                                this.leftPad(Math.floor(this.measureTo(element.name) / 8), 4)
+                            } byte(s), ${
+                                this.leftPad(
+                                    this.measureTo(element.name)
+                                    - Math.floor(this.measureTo(element.name) / 8)*8
+                                , 4)
+                            } bits = ${this.leftPad(this.measureTo(element.name), 4)} bits total] `
+                        + 
+                        `   ${this.rightPad(`${element.containingType.name}#${String(element.name)}`, 50)} => ${displayedValue}`
+                    );
+                } catch (e) {
+                    console.log(`Error while tracing write operation for element ${String(element.name)}: ${e.message}`);
+                    console.error(e);
                 }
             }
 
