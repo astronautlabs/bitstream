@@ -30,6 +30,9 @@
   },
   "author": "Astronaut Labs",
   "license": "MIT",
+  "peerDependencies": {
+    "reflect-metadata": "^0.1.13"
+  },
   "devDependencies": {
     "@types/chai": "^4.2.14",
     "@types/node": "^14.0.4",
