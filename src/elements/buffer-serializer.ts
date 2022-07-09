@@ -52,6 +52,10 @@ import { summarizeField } from "./utils";
         let truncate = field.options?.buffer?.truncate ?? true;
         let fill = field.options?.buffer?.fill ?? (truncate ? 0 : false);
 
+        if (!value) {
+            throw new Error(`BufferSerializer: Field ${String(field.name)}: Cannot encode a null buffer`);
+        }
+
         if (value.length > fieldLength) {
             if (truncate) {
                 writer.writeBuffer(value.subarray(0, fieldLength));
