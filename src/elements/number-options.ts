@@ -7,5 +7,13 @@ export interface NumberOptions {
      *   Only lengths of 32 (32-bit single-precision) and 64
      *   (64-bit double-precision) bits are supported
      */
-    format : 'unsigned' | 'signed' | 'float';
+    format? : 'unsigned' | 'signed' | 'float';
+
+    /**
+     * Specify the byte order for this number. 
+     * - **big-endian** - Also known as network byte order, this is the default.
+     * - **little-endian** - Least significant byte first. Only valid when the field
+     *   length is a multiple of 8 bits (ie it contains 1 or more whole bytes)
+     */
+    byteOrder? : 'big-endian' | 'little-endian';
 }

@@ -1,5 +1,5 @@
 import { BitstreamMeasurer, BitstreamReader, BitstreamWriter } from "../bitstream";
-import { BufferedWritable, Constructor } from "../common";
+import { BufferedWritable, Constructor, IncompleteReadResult } from "../common";
 import { FieldDefinition } from "./field-definition";
 import { VariantDefinition } from "./variant-definition";
 
@@ -80,6 +80,13 @@ export class BitstreamElement {
      * for deserialization this is just after the instance is created.
      */
     context : any;
+
+    /**
+     * The constructor parameters passed when constructing this element.
+     * These must be saved for use during variation, should it be needed.
+     * The values will be cleared out after parsing is completed.
+     */
+    savedConstructorParams: any[];
 
     // Lifecycle events
 
@@ -600,15 +607,16 @@ export class BitstreamElement {
      *              applied to the returned instance instead of this instance
      * @param options Serialization options that modify how the group is read. Most notably this allows you to skip 
      *              specific fields.
-     * @returns The current instance, unless the instance was variated into a subclass, in which case it will be the 
+     * @returns A generator. When the read is complete (done=true), the result will be the current instance, 
+     *              unless the instance was variated into a subclass, in which case it will be the 
      *              variated subclass instance. Because this process can occur, it is important to observe the result 
-     *              of this function.
+     *              of this function. If the read buffer becomes exhausted, an IncompleteReadResult will be returned.
      */
     protected *readGroup(
         bitstream : BitstreamReader, 
         name : string, 
         options? : ReadOptions<this>
-    ) {
+    ): Generator<IncompleteReadResult, this> {
         let wasBeingRead = this.isBeingRead;
         let instance = this;
 
@@ -652,7 +660,11 @@ export class BitstreamElement {
                     while (true) {
                         let result = g.next();
                         if (result.done === false) {
-                            yield result.value;
+                            let incompleteResult = result.value;
+                            yield { 
+                                remaining: incompleteResult.remaining,
+                                contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                            };
                         } else {
                             instance = result.value;
                             break;
@@ -680,7 +692,11 @@ export class BitstreamElement {
                     while (true) {
                         let result = g.next();
                         if (result.done === false) {
-                            yield result.value;
+                            let incompleteResult = result.value;
+                            yield { 
+                                remaining: incompleteResult.remaining, 
+                                contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                            };
                         } else {
                             readValue = result.value;
                             break;
@@ -826,10 +842,15 @@ export class BitstreamElement {
         let g = this.readGroup(bitstream, '*', options);
         while (true) {
             let result = g.next();
-            if (result.done === false)
-                yield result.value;
-            else
+            if (result.done === false) {
+                let incompleteResult = result.value;
+                yield { 
+                    remaining: incompleteResult.remaining, 
+                    contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(this)}'`
+                };
+            } else {
                 return result.value;
+            }
         }
     }
 
@@ -841,17 +862,24 @@ export class BitstreamElement {
      *                  appropriate variant instance and return it; from there on out the rest of the fields read will 
      *                  be applied to that instance instead of this instance.
      * @param options Options which modify how the element is read. Most notably this lets you skip specific fields
-     * @returns The current instance, unless it was variated into a subclass instance, in which case it will be the 
-     *                  variated subclass instance. Thus it is important to observe the result of this method.
+     * @returns A generator which will yield only one result. If the generator completes (done=true), then the result 
+     *          will be `this` the current instance, unless it was variated into a subclass instance, in which case 
+     *          it will be the variated subclass instance. Thus it is important to observe the result of this method.
+     *          If the read buffer becomes exhausted, the result will be an IncompleteReadResult.
      */
     *readOwn(bitstream : BitstreamReader, options? : CommonOptions) {
         let g = this.readGroup(bitstream, '$*', options);
         while (true) {
             let result = g.next();
-            if (result.done === false)
-                yield result.value;
-            else
+            if (result.done === false) {
+                let incompleteResult = result.value;
+                yield { 
+                    remaining: incompleteResult.remaining, 
+                    contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(this)}'` 
+                };
+            } else {
                 return result.value;
+            }
         }
     }
 
@@ -865,16 +893,25 @@ export class BitstreamElement {
      *     parse operation.
      * @returns 
      */
-    *variate(reader : BitstreamReader, parent? : BitstreamElement, field? : FieldDefinition): Generator<number, this> {
+    *variate(reader : BitstreamReader, parent? : BitstreamElement, field? : FieldDefinition): Generator<IncompleteReadResult, this> {
         let variantType : typeof BitstreamElement = this.determineVariantType(parent, field?.options.variants);
         if (variantType) {
-            let g = variantType.read(reader, { parent, field, elementBeingVariated: this, context: this.context });
+            let g = variantType.read(reader, { 
+                parent, field, 
+                elementBeingVariated: this, 
+                context: this.context
+            });
             do {
                 let result = g.next();
-                if (result.done === false)
-                    yield result.value;
-                else
+                if (result.done === false) {
+                    let incompleteResult = result.value;
+                    yield { 
+                        remaining: incompleteResult.remaining, 
+                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(this)}'` 
+                    };
+                } else {
                     return <this> result.value;
+                }
             } while (true);
         }
 
@@ -894,11 +931,11 @@ export class BitstreamElement {
         reader : BitstreamReader, 
         options : StaticReadOptions = {}
     ) : Promise<InstanceType<T>> {
-        let iterator = <Generator<number, InstanceType<T>>> this.read(reader, options);
+        let iterator = <Generator<IncompleteReadResult, InstanceType<T>>> this.read(reader, options);
         do {
             let result = iterator.next();
             if (result.done === false) {
-                await reader.assure(result.value);
+                await reader.assure(result.value.remaining);
                 continue;
             }
     
@@ -923,10 +960,14 @@ export class BitstreamElement {
         let gen = this.read(reader, options);
         while (true) {
             let result = gen.next();
-            if (result.done === false)
-                throw new Error(`Buffer exhausted when reading ${result.value} bits at offset ${reader.offset}`);
-            else
+            if (result.done === false) {
+                throw new Error(
+                    `Buffer exhausted while reading ${result.value.remaining} bits ` 
+                    + `at offset ${reader.offset}, ` 
+                    + `context: ${result.value.contextHint()}`);
+            } else {
                 return result.value;
+            }
         }
     }
 
@@ -1017,9 +1058,16 @@ export class BitstreamElement {
         this : T, 
         reader : BitstreamReader,
         options : StaticReadOptions = {}
-    ): Generator<number, InstanceType<T>> {
+    ) {
         options.context ??= {};
-        let element : BitstreamElement = new (this as any)(...(options.params ?? []));
+        let constructorParams = options.params 
+            ?? options.elementBeingVariated?.savedConstructorParams 
+            ?? []
+        ;
+
+        let element : BitstreamElement = new (this as any)(...constructorParams);
+        element.savedConstructorParams = constructorParams;
+
         let allowExhaustion = options.allowExhaustion ?? false;
         element.context = options.context;
         element.onParseStarted(options.elementBeingVariated);
@@ -1052,7 +1100,12 @@ export class BitstreamElement {
                 if (result.done === false) {
                     if (allowExhaustion)
                         return <InstanceType<T>> element;
-                    yield result.value;
+                    let incompleteResult = result.value;
+
+                    yield { 
+                        remaining: incompleteResult.remaining, 
+                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                    };
                 } else {
                     element = result.value;
                     break;
@@ -1065,7 +1118,12 @@ export class BitstreamElement {
                 if (result.done === false) {
                     if (allowExhaustion)
                         return <InstanceType<T>> element;
-                    yield result.value;
+
+                    let incompleteResult = result.value;
+                    yield { 
+                        remaining: incompleteResult.remaining, 
+                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                    };
                 } else {
                     element = result.value;
                     break;
@@ -1084,7 +1142,12 @@ export class BitstreamElement {
                 if (result.done === false) {
                     if (allowExhaustion)
                         return <InstanceType<T>> element;
-                    yield result.value;
+
+                    let incompleteResult = result.value;
+                    yield { 
+                        remaining: incompleteResult.remaining, 
+                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                    };
                 } else {
                     element = result.value;
                     break;
@@ -1092,6 +1155,7 @@ export class BitstreamElement {
             }
         }
         
+        delete element.savedConstructorParams;
         if (!options?.elementBeingVariated)
             element.onParseFinished();
         return <InstanceType<T>> element;

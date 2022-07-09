@@ -2,12 +2,13 @@ import { BitstreamElement } from "./element";
 import { Serializer } from "./serializer";
 import { FieldDefinition } from "./field-definition";
 import { BitstreamReader, BitstreamWriter } from "../bitstream";
+import { IncompleteReadResult } from "../common";
 
 /**
  * Serializes BitstreamElement instances to/from bitstreams
  */
 export class StructureSerializer implements Serializer {
-    *read(reader : BitstreamReader, type : typeof BitstreamElement, parent : BitstreamElement, field : FieldDefinition) {
+    *read(reader : BitstreamReader, type : typeof BitstreamElement, parent : BitstreamElement, field : FieldDefinition): Generator<IncompleteReadResult, any> {
         let g = type.read(reader, { parent, field, context: parent.context });
         while (true) {
             let result = g.next();

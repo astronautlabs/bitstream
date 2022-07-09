@@ -3,12 +3,14 @@ import { Serializer } from "./serializer";
 import { FieldDefinition } from "./field-definition";
 import { BitstreamElement } from "./element";
 import { resolveLength } from "./resolve-length";
+import { IncompleteReadResult } from "../common";
+import { summarizeField } from "./utils";
 
 /**
  * Serializes buffers to/from bitstreams
  */
  export class BufferSerializer implements Serializer {
-    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         let length : number;
         
         try {
@@ -29,7 +31,7 @@ import { resolveLength } from "./resolve-length";
         while (true) {
             let result = gen.next();
             if (result.done === false)
-                yield result.value*8;
+                yield { remaining: result.value*8, contextHint: () => summarizeField(field) };
             else
                 break;
         }

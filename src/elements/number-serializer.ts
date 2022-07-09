@@ -3,12 +3,14 @@ import { resolveLength } from "./resolve-length";
 import { Serializer } from "./serializer";
 import { FieldDefinition } from "./field-definition";
 import { BitstreamReader, BitstreamWriter } from "../bitstream";
+import { IncompleteReadResult } from "../common";
+import { summarizeField } from "./utils";
 
 /**
  * Serializes numbers to/from bitstreams
  */
 export class NumberSerializer implements Serializer {
-    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         let length : number;
         try {
             length = resolveLength(field.length, parent, field);
@@ -17,7 +19,7 @@ export class NumberSerializer implements Serializer {
         }
 
         if (!reader.isAvailable(length))
-            yield length;
+            yield { remaining: length, contextHint: () => summarizeField(field) };
         
         let format = field.options?.number?.format ?? 'unsigned';
         if (format === 'unsigned')

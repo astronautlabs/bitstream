@@ -4,18 +4,20 @@ import { resolveLength } from "./resolve-length";
 import { Serializer } from "./serializer";
 import { StructureSerializer } from "./structure-serializer";
 import { FieldDefinition } from "./field-definition";
+import { IncompleteReadResult } from "../common";
+import { summarizeField } from "./utils";
 
 /**
  * Serializes arrays to/from bitstreams
  */
 export class ArraySerializer implements Serializer {
-    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         let count = 0;
         let elements = [];
 
         if (field?.options?.array?.countFieldLength) {
             if (!reader.isAvailable(field.options.array.countFieldLength))
-                yield field.options.array.countFieldLength;
+                yield { remaining: field.options.array.countFieldLength, contextHint: () => summarizeField(field) };
             count = reader.readSync(field.options.array.countFieldLength);
         } else if (field?.options?.array?.count) {
             count = resolveLength(field.options.array.count, parent, field);
@@ -61,14 +63,14 @@ export class ArraySerializer implements Serializer {
 
 
                         if (!reader.isAvailable(elementLength))
-                            yield elementLength;
+                            yield { remaining: elementLength, contextHint: () => summarizeField(field) };
                         
                         readNumber();
                     } while (true);
             } else {
                 for (let i = 0; i < count; ++i) {
                     if (!reader.isAvailable(elementLength))
-                        yield elementLength;
+                        yield { remaining: elementLength, contextHint: () => summarizeField(field) };
                     
                     readNumber();
                 }

@@ -3,15 +3,17 @@ import { BitstreamElement } from "./element";
 import { resolveLength } from "./resolve-length";
 import { Serializer } from "./serializer";
 import { FieldDefinition } from "./field-definition";
+import { IncompleteReadResult } from "../common";
+import { summarizeField } from "./utils";
 
 /**
  * Serializes booleans to/from bitstreams.
  */
 export class BooleanSerializer implements Serializer {
-    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         let length = resolveLength(field.length, parent, field);
         if (!reader.isAvailable(length))
-            yield length;
+            yield { remaining: length, contextHint: () => summarizeField(field) };
 
         const numericValue = reader.readSync(length);
         const trueValue = field?.options?.boolean?.true ?? 1;

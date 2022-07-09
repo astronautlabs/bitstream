@@ -1,4 +1,5 @@
 import { BitstreamReader, BitstreamWriter } from "../bitstream";
+import { IncompleteReadResult } from "../common";
 import { BitstreamElement } from "./element";
 import { FieldDefinition } from "./field-definition";
 
@@ -8,6 +9,6 @@ import { FieldDefinition } from "./field-definition";
  * and use them by specifying the `serializer` option of `@Field()`
  */
 export interface Serializer {
-    read(reader : BitstreamReader, type : any, parent : BitstreamElement, field : FieldDefinition) : Generator<number, any>;
+    read(reader : BitstreamReader, type : any, parent : BitstreamElement, field : FieldDefinition) : Generator<IncompleteReadResult, any>;
     write(writer : BitstreamWriter, type : any, parent : BitstreamElement, field : FieldDefinition, value : any);
 }

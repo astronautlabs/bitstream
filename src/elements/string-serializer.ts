@@ -3,16 +3,18 @@ import { BitstreamElement } from "./element";
 import { resolveLength } from "./resolve-length";
 import { Serializer } from "./serializer";
 import { FieldDefinition } from "./field-definition";
+import { IncompleteReadResult } from "../common";
+import { summarizeField } from "./utils";
 
 /**
  * Serializes strings to/from bitstreams
  */
 export class StringSerializer implements Serializer {
-    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition) {
+    *read(reader: BitstreamReader, type : any, parent : BitstreamElement, field: FieldDefinition): Generator<IncompleteReadResult, any> {
         let length = resolveLength(field.length, parent, field);
 
         if (!reader.isAvailable(length*8))
-            yield length*8;
+            yield { remaining: length*8, contextHint: () => summarizeField(field) };
             
         return reader.readStringSync(length, field.options.string);
     }

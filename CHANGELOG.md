@@ -1,3 +1,6 @@
+# v4.0.0
+- Changed generators to return IncompleteReadResult to enable better context information during buffer exhaustion
+
 # v3.1.1
 
 - Fix: Crash during `serialize()` on element with no fields
