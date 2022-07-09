@@ -1,3 +1,6 @@
+# v4.0.1
+- Guard when BufferSerializer is trying to write a null buffer
+
 # v4.0.0
 - Changed generators to return IncompleteReadResult to enable better context information during buffer exhaustion
 
