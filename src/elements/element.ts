@@ -82,6 +82,18 @@ export class BitstreamElement {
     context : any;
 
     /**
+     * Number of total bits read from bitstream readers so far while parsing this element. 
+     * Each read operation done via the read*() methods accumulates this counter. This can be 
+     * a useful alternative to measure() when implementing "tail" buffers for extensible element 
+     * types when there are multiple valid ways to encode data which has been read, 
+     * ie the way you read it might not be the same as when you write it. 
+     * 
+     * The alternative (measure()) requires that the decoding and encoding of a specific bitstream element 
+     * must be binary-compatible (ie that there is exactly one correct way to encode the data).
+     */
+    bitsRead : number;
+
+    /**
      * The constructor parameters passed when constructing this element.
      * These must be saved for use during variation, should it be needed.
      * The values will be cleared out after parsing is completed.
@@ -663,7 +675,7 @@ export class BitstreamElement {
                             let incompleteResult = result.value;
                             yield { 
                                 remaining: incompleteResult.remaining,
-                                contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                                contextHint: () => this.summarizeElementField(element, incompleteResult.contextHint())
                             };
                         } else {
                             instance = result.value;
@@ -687,6 +699,7 @@ export class BitstreamElement {
                 }
 
                 try {
+                    let startOffset = bitstream.offset;
                     let g = element.options.serializer.read(bitstream, element.type, instance, element);
                     let readValue;
                     while (true) {
@@ -695,7 +708,7 @@ export class BitstreamElement {
                             let incompleteResult = result.value;
                             yield { 
                                 remaining: incompleteResult.remaining, 
-                                contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                                contextHint: () => this.summarizeElementField(element, incompleteResult.contextHint()) 
                             };
                         } else {
                             readValue = result.value;
@@ -706,6 +719,7 @@ export class BitstreamElement {
                     if (!element.options.isIgnored)
                         instance[element.name] = readValue;
                     instance.readFields.push(element.name);
+                    instance.bitsRead += (bitstream.offset - startOffset);
 
                     let displayedValue = `${readValue}`;
 
@@ -846,7 +860,7 @@ export class BitstreamElement {
                 let incompleteResult = result.value;
                 yield { 
                     remaining: incompleteResult.remaining, 
-                    contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(this)}'`
+                    contextHint: () => this.summarizeElementOperation(`read()`, incompleteResult.contextHint())
                 };
             } else {
                 return result.value;
@@ -875,7 +889,7 @@ export class BitstreamElement {
                 let incompleteResult = result.value;
                 yield { 
                     remaining: incompleteResult.remaining, 
-                    contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(this)}'` 
+                    contextHint: () => this.summarizeElementOperation(`readOwn()`, incompleteResult.contextHint()) 
                 };
             } else {
                 return result.value;
@@ -896,6 +910,8 @@ export class BitstreamElement {
     *variate(reader : BitstreamReader, parent? : BitstreamElement, field? : FieldDefinition): Generator<IncompleteReadResult, this> {
         let variantType : typeof BitstreamElement = this.determineVariantType(parent, field?.options.variants);
         if (variantType) {
+            if (globalThis.BITSTREAM_TRACE)
+                console.log(`Selected variant ${variantType.name}`);
             let g = variantType.read(reader, { 
                 parent, field, 
                 elementBeingVariated: this, 
@@ -907,7 +923,7 @@ export class BitstreamElement {
                     let incompleteResult = result.value;
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(this)}'` 
+                        contextHint: () => this.summarizeElementOperation(`variate()`, incompleteResult.contextHint()) 
                     };
                 } else {
                     return <this> result.value;
@@ -964,7 +980,7 @@ export class BitstreamElement {
                 throw new Error(
                     `Buffer exhausted while reading ${result.value.remaining} bits ` 
                     + `at offset ${reader.offset}, ` 
-                    + `context: ${result.value.contextHint()}`);
+                    + `context:\n     - ${result.value.contextHint().replace(/\n/g, "\n     - ")}\n\n`);
             } else {
                 return result.value;
             }
@@ -1075,8 +1091,10 @@ export class BitstreamElement {
         element.parent = options.parent;
         let parentStillReading = options.elementBeingVariated?.isBeingRead ?? false;
         element.isBeingRead = true;
+        element.bitsRead = 0;
 
         if (options.elementBeingVariated) {
+            element.bitsRead = options.elementBeingVariated.bitsRead;
             element.syntax.forEach(f => {
                 if (options.field?.options?.skip && options.field.options.skip.includes(f.name))
                     return;
@@ -1104,7 +1122,7 @@ export class BitstreamElement {
 
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                        contextHint: () => element.summarizeElementOperation(`${this.name}.readVariant()`, incompleteResult.contextHint()) 
                     };
                 } else {
                     element = result.value;
@@ -1122,7 +1140,7 @@ export class BitstreamElement {
                     let incompleteResult = result.value;
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                        contextHint: () => element.summarizeElementOperation(`${this.name}.read()`, incompleteResult.contextHint()) 
                     };
                 } else {
                     element = result.value;
@@ -1146,7 +1164,7 @@ export class BitstreamElement {
                     let incompleteResult = result.value;
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => `${incompleteResult.contextHint()}, element state: '${JSON.stringify(element)}'` 
+                        contextHint: () => element.summarizeElementOperation(`tail-variation`, incompleteResult.contextHint()) 
                     };
                 } else {
                     element = result.value;
@@ -1159,5 +1177,14 @@ export class BitstreamElement {
         if (!options?.elementBeingVariated)
             element.onParseFinished();
         return <InstanceType<T>> element;
+    }
+
+    
+    protected summarizeElementField(field: FieldDefinition, innerContext: string) {
+        return `${innerContext}\n[readField()] ${this.constructor.name}#${String(field.name)}`;
+    }
+
+    protected summarizeElementOperation(operation: string, innerContext: string) {
+        return `${innerContext}\n[${operation}] ${this.constructor.name}`;
     }
 }
