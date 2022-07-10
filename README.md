@@ -382,6 +382,34 @@ In the above case, the second field is only present when the first field is `10`
 
 `excludedWhen` is the opposite of `presentWhen` and is provided for convenience and expressiveness.
 
+### Field Initializers
+
+When using `@Field()` to present a child BitstreamElement relationship,
+it can be useful to run some code to initialize the instance that is 
+created.
+
+```ts
+class Parent {
+    @Field(8)
+    context: number;
+
+    @Field({ initializer: (instance, parent) => instance.context = parent.context })
+    child: Child;
+}
+
+class Child {
+    context: number;
+}
+```
+
+You can also use this from the static `read()` method:
+
+```ts
+Child.read(reader, { initializer: instance => instance.context = somePreviouslyParsedContextNumber });
+```
+
+This is a useful pattern for passing knowledge needed for parsing a child element down from unknown parent elements.
+
 ### Dynamic lengths
 
 Sometimes the length of a field depends on what has been read before the field being read.  You can specify lengths as _determinant_ functions which determine lengths dynamically:

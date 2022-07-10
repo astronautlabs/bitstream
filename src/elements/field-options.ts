@@ -100,4 +100,12 @@ export interface FieldOptions {
      * by the `@Reserved()` decorator to ensure that high bits are always written.
      */
     writtenValue?: ValueDeterminant;
+
+    /**
+     * Initializer to call when constructing new instances for this field. 
+     * The element instance that contains this field will be passed as the second parameter.
+     * This is called after constructing the new instance but before any of its fields are 
+     * parsed.
+     */
+    initializer?: (instance: any, parentElement: any) => void;
 }

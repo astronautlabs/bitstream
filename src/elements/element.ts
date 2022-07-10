@@ -51,6 +51,13 @@ export interface StaticReadOptions<T = BitstreamElement> extends ReadOptions<T> 
     allowExhaustion? : boolean;
     elementBeingVariated? : BitstreamElement;
     params? : any[];
+
+    /**
+     * Provide a function which will be invoked passing the new instance being created.
+     * Useful for customizing the setup of an object before it is otherwise parsed.
+     * This is run after constructing the object but before parsing any fields.
+     */
+    initializer? : (instance: T) => void;
 }
 
 /**
@@ -1082,6 +1089,15 @@ export class BitstreamElement {
         ;
 
         let element : BitstreamElement = new (this as any)(...constructorParams);
+
+        if (options.initializer) {
+            options.initializer(element);
+        }
+
+        if (options.field?.options?.initializer) {
+            options.field.options.initializer(element, options.parent);
+        }
+
         element.savedConstructorParams = constructorParams;
 
         let allowExhaustion = options.allowExhaustion ?? false;

@@ -1,3 +1,6 @@
+# v4.1.0
+- Add support for initializers
+
 # v4.0.1
 - Guard when BufferSerializer is trying to write a null buffer
 
