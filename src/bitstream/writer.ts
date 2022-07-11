@@ -70,7 +70,7 @@ export class BitstreamWriter {
             let buffer = new Uint8Array(byteCount);
             let strBuf = this.textEncoder.encode(value);
             buffer.set(strBuf, 0);
-            this.writeBuffer(buffer);
+            this.writeBytes(buffer);
         } else {
             if (typeof Buffer === 'undefined') {
                 throw new Error(`Encoding '${encoding}' is not supported: No Node.js Buffer implementation found, web standard TextEncoder only supports utf-8`);
