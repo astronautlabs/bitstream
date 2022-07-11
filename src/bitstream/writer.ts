@@ -51,7 +51,7 @@ export class BitstreamWriter {
     
     flush() {
         if (this.bufferedBytes > 0) {
-            this.stream.write(this.buffer.subarray(0, this.bufferedBytes));
+            this.stream.write(Buffer.from(this.buffer.slice(0, this.bufferedBytes)));
             this.bufferedBytes = 0;
         }
     }
