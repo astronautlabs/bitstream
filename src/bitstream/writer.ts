@@ -36,6 +36,10 @@ export class BitstreamWriter {
         return this.pendingBits;
     }
 
+    /**
+     * Finish the current byte (assuming zeros for the remaining bits, if necessary)
+     * and flushes the output.
+     */
     end() {
         this.finishByte();
         this.flush();
