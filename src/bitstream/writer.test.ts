@@ -328,11 +328,8 @@ describe('BitstreamWriter', it => {
         expect(bufs.length).to.equal(0);
         writer.end();
         expect(bufs.length).to.equal(1);
-        expect(bufs[0].length).to.equal(4);
+        expect(bufs[0].length).to.equal(1);
         expect(bufs[0][0]).to.equal(44);
-        expect(bufs[0][1]).to.equal(0);
-        expect(bufs[0][2]).to.equal(0);
-        expect(bufs[0][3]).to.equal(0);
     });
     it('.end() flushes partial bytes', () => {
         let bufs : Buffer[] = [];
@@ -343,11 +340,8 @@ describe('BitstreamWriter', it => {
         expect(bufs.length).to.equal(0);
         writer.end();
         expect(bufs.length).to.equal(1);
-        expect(bufs[0].length).to.equal(4);
+        expect(bufs[0].length).to.equal(1);
         expect(bufs[0][0]).to.equal(0b11110000);
-        expect(bufs[0][1]).to.equal(0);
-        expect(bufs[0][2]).to.equal(0);
-        expect(bufs[0][3]).to.equal(0);
     });
     it('.writeString() writes utf-8 strings correctly', () => {
         let bufs : Buffer[] = [];
