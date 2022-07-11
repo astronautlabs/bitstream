@@ -1,6 +1,7 @@
 # v4.1.1
 - Fix: Calling flush early resulted in writing entire buffer size instead
-- 
+- Added fast path for BitstreamWriter#writeBytes() when the stream is byte-aligned
+
 # v4.1.0
 - Add support for initializers
 

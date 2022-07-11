@@ -97,13 +97,28 @@ export class BitstreamWriter {
      * Write the given buffer to the bitstream. This is done by treating each byte as an 8-bit write.
      * Note that the bitstream does not need to be byte-aligned to call this method, meaning you can write 
      * a set of bytes at a non=zero bit offset if you wish.
-     * @param buffer The buffer to write
+     * @param chunk The buffer to write
      */
-    writeBytes(buffer : Uint8Array, offset = 0, length? : number) {
-        length ??= buffer.length - offset;
+    writeBytes(chunk : Uint8Array, offset = 0, length? : number) {
+        length ??= chunk.length - offset;
 
-        for (let i = offset, max = Math.min(buffer.length, offset+length); i < max; ++i)
-            this.write(8, buffer[i]);
+        // Fast path: Byte-aligned
+        if (this.byteOffset === 0) {
+            while (chunk.length > 0) {
+                let writableLength = Math.min(chunk.length, this.buffer.length - this.bufferedBytes);
+                this.buffer.set(chunk.subarray(0, writableLength), this.bufferedBytes);
+                this.bufferedBytes += writableLength;
+                chunk = chunk.subarray(writableLength);
+
+                if (this.bufferedBytes >= this.buffer.length)
+                    this.flush();
+            }
+
+            return;
+        }
+
+        for (let i = offset, max = Math.min(chunk.length, offset+length); i < max; ++i)
+            this.write(8, chunk[i]);
     }
 
     private min(a : bigint, b : bigint) {
