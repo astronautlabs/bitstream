@@ -1,3 +1,6 @@
+# v4.1.1
+- Fix: Calling flush early resulted in writing entire buffer size instead
+- 
 # v4.1.0
 - Add support for initializers
 
