@@ -3,6 +3,8 @@ import { BufferedWritable, Constructor, IncompleteReadResult } from "../common";
 import { FieldDefinition } from "./field-definition";
 import { VariantDefinition } from "./variant-definition";
 
+const SERIALIZE_WRITERS = Symbol('Writers used by Bitstream#serialize() for this element type.');
+
 /**
  * A reference to a field. Can be a string/symbol or a type-safe function 
  * which exemplifies the field.
@@ -228,6 +230,12 @@ export class BitstreamElement {
     }
 
     /**
+     * The size of the write buffer when using the serialize() method. This is set to 1KB by default, but may need to 
+     * be tweaked for large objects.
+     */
+    serializeBufferSize = 1024;
+
+    /**
      * Serialize all fields or a subset of fields into a buffer. 
      * @param fromRef The first field that should be serialized. If not specified, serialization begins at the start of
      *                  the element
@@ -271,47 +279,60 @@ export class BitstreamElement {
         let toIndex = this.syntax.findIndex(x => x === to);
 
         let stream = new BufferedWritable();
-        let writer = new BitstreamWriter(stream);
 
-        if (fromIndex > toIndex) {
-            throw new Error(`Cannot measure from field ${fromIndex} (${String(from.name)}) to ${toIndex} (${String(to.name)}): First field comes after last field`);
-        }
+        // To reduce allocations during serialize(), we need to reuse writers.
 
-        for (let i = fromIndex, max = toIndex; i <= max; ++i) {
-            let field = this.syntax[i];
+        if (!this.constructor[SERIALIZE_WRITERS])
+            this.constructor[SERIALIZE_WRITERS] = [];
+        let writer: BitstreamWriter = this.constructor[SERIALIZE_WRITERS].pop() ?? new BitstreamWriter(stream, this.serializeBufferSize);
+        writer.stream = stream;
+        
+        try {
 
-            if (!this.isPresent(field, this))
-                continue;
+            if (fromIndex > toIndex) {
+                throw new Error(`Cannot measure from field ${fromIndex} (${String(from.name)}) to ${toIndex} (${String(to.name)}): First field comes after last field`);
+            }
 
-            let writtenValue = this[field.name];
+            for (let i = fromIndex, max = toIndex; i <= max; ++i) {
+                let field = this.syntax[i];
 
-            if (field.options.writtenValue) {
-                if (typeof field.options.writtenValue === 'function') {
-                    writtenValue = field.options.writtenValue(this, field);
-                } else {
-                    writtenValue = field.options.writtenValue;
+                if (!this.isPresent(field, this))
+                    continue;
+
+                let writtenValue = this[field.name];
+
+                if (field.options.writtenValue) {
+                    if (typeof field.options.writtenValue === 'function') {
+                        writtenValue = field.options.writtenValue(this, field);
+                    } else {
+                        writtenValue = field.options.writtenValue;
+                    }
+                }
+
+                try {
+                    field.options.serializer.write(writer, field.type, this, field, writtenValue);
+                } catch (e) {
+                    if (globalThis.BITSTREAM_TRACE !== false) {
+                        console.error(`Failed to write field ${field.type.name}#${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
+                        console.error(e);
+                    }
+                    throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
                 }
             }
 
-            try {
-                field.options.serializer.write(writer, field.type, this, field, writtenValue);
-            } catch (e) {
-                if (globalThis.BITSTREAM_TRACE !== false) {
-                    console.error(`Failed to write field ${field.type.name}#${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
-                    console.error(e);
-                }
-                throw new Error(`Failed to write field ${String(field.name)} using ${field.options.serializer.constructor.name}: ${e.message}`);
+            if (writer.byteOffset !== 0 && !autoPad) {
+                let length = writer.offset;
+                throw new Error(`${length} bits (${Math.floor(length / 8)} bytes + ${length % 8} bits) is not an even amount of bytes!`);
             }
+
+            writer.end();
+
+            return stream.buffer;
+        } finally {
+
+            writer.reset();
+            this.constructor[SERIALIZE_WRITERS].push(writer);
         }
-
-        if (writer.byteOffset !== 0 && !autoPad) {
-            let length = writer.offset;
-            throw new Error(`${length} bits (${Math.floor(length / 8)} bytes + ${length % 8} bits) is not an even amount of bytes!`);
-        }
-
-        writer.end();
-
-        return stream.buffer;
     }
 
     /**

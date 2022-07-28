@@ -1,3 +1,9 @@
+# v4.1.2
+- Performance: `serialize()` now uses a 1KB buffer by default, previously the default buffer size was 1 byte. This yields a 
+  massive performance increase when writing large objects using `serialize()`
+- Performance: `serialize()` will now recycle its `BitstreamWriter` objects in order to eliminate object allocations,
+  providing an additional performance increase.
+
 # v4.1.1
 - Fix: Calling flush early resulted in writing entire buffer size instead
 - Added fast path for BitstreamWriter#writeBytes() when the stream is byte-aligned

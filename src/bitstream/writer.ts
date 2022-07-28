@@ -10,7 +10,7 @@ export class BitstreamWriter {
      * @param stream The writable stream to write to
      * @param bufferSize The number of bytes to buffer before flushing onto the writable
      */
-    constructor(readonly stream : Writable, readonly bufferSize = 1) {
+    constructor(public stream : Writable, readonly bufferSize = 1) {
         this.buffer = new Uint8Array(bufferSize);
     }
 
@@ -43,6 +43,13 @@ export class BitstreamWriter {
     end() {
         this.finishByte();
         this.flush();
+    }
+
+    /**
+     * Reset the bit offset of this writer back to zero.
+     */
+    reset() {
+        this._offset = 0;
     }
 
     private finishByte() {
