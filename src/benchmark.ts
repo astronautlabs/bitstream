@@ -1,6 +1,8 @@
 /* istanbul ignore file */
 import { Readable } from 'stream';
 import { BitstreamReader } from './bitstream';
+import { performance } from 'perf_hooks';
+
 export class FPSCounter {
     constructor(
         public label : string,
@@ -90,7 +92,7 @@ export class FPSCounter {
 class Generator extends Readable {
     constructor() {
         super();
-        setInterval(() => this.push(Buffer.alloc(10000, 123)), 10);
+        setInterval(() => this.push(Buffer.alloc(10000000, 123)), 10);
     }
 
     _read(size : number) {
@@ -105,10 +107,22 @@ function syncTest() {
     counter.start(5*1000);
     generator.on('data', data => {
         bitstream.addBuffer(data);
+        let min = Infinity, max = 0;
+        let totalStart = performance.now();
+
         for (let i = 0; i < data.length; ++i) {
+            let start = performance.now();
             let byte = bitstream.readSync(8);
+            let time = performance.now() - start;
+
+            min = Math.min(min, time);
+            max = Math.max(max, time);
+
             counter.hit();
         }
+
+        let total = performance.now() - totalStart;
+        console.log(`min=${min}ms, max=${max}ms, total=${total}ms`);
     });
 }
 
@@ -118,7 +132,14 @@ async function asyncTest() {
     let counter = new FPSCounter('hits');
 
     counter.start(5*1000);
-    generator.on('data', data => bitstream.addBuffer(data));
+    generator.on('data', data => {
+        bitstream.addBuffer(data);
+        console.log(`backlog: ${bitstream.available} bits now enqueued`);
+    });
+
+    setInterval(() => {
+        console.log(`backlog: ${bitstream.available} bits not yet read`);
+    }, 5*1000);
 
     while (true) {
         let byte = await bitstream.read(8);
