@@ -19,6 +19,7 @@
     "clean": "rimraf dist dist.esm",
     "build": "npm run clean && tsc -b && tsc -b tsconfig.esm.json",
     "test": "npm run build && nyc node dist/test",
+    "test:nocov": "npm run build && node dist/test",
     "benchmark": "npm run build && node dist/benchmark",
     "prepublishOnly": "npm test"
   },

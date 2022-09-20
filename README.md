@@ -798,3 +798,7 @@ bits.
 
 We encourage you to file issues and send pull requests! Please be sure to follow the 
 [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Tests
+
+Use `npm test` to run the test suite after making changes. Code coverage will also be generated. **Important:** Istanbul (the code coverage tool we are using) instruments the code to perform its coverage analysis. This breaks line numbers in stack traces. Use `npm test:nocov` to skip Code Coverage generation to obtain correct line numbers during testing.
