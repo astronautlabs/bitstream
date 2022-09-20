@@ -229,12 +229,55 @@ export class BitstreamReader {
      */
     *readBytes(buffer : Uint8Array, offset : number = 0, length? : number): Generator<number, any> {
         length ??= buffer.length - offset;
-        
-        for (let i = offset, max = Math.min(buffer.length, offset+length); i < max; ++i) {
-            if (!this.isAvailable(8))
-                yield max - i;
-            
-            buffer[i] = this.readSync(8);
+
+        let bitOffset = this._offsetIntoBuffer % 8;
+
+        // If this is a byte-aligned read, we can do this more optimally than using readSync
+
+        if (bitOffset === 0) {
+            if (globalThis.BITSTREAM_TRACE) {
+                console.log(`------------------------------------------------------------    Byte-aligned readBytes(), length=${length}`);
+                console.log(`------------------------------------------------------------    readBytes(): Pre-operation: buffered=${this.bufferedLength} bits, bufferIndex=${this._bufferIndex}, bufferOffset=${this._offsetIntoBuffer}, bufferLength=${this.buffers[this._bufferIndex]?.length || '<none>'} bufferCount=${this.buffers.length}`);
+            }
+            let remainingLength = length;
+            while (remainingLength > 0) {
+                if (this.bufferedLength < remainingLength * 8)
+                    yield Math.max((remainingLength * 8 - this.bufferedLength) / 8);
+
+                let bufferOffset = Math.floor(this._offsetIntoBuffer / 8);
+                let contributionBuffer = this.buffers[this._bufferIndex];
+                let contribution = Math.min(remainingLength, contributionBuffer.length);
+                buffer.set(contributionBuffer.slice(bufferOffset, bufferOffset + contribution));
+
+                this._offsetIntoBuffer += contribution * 8;
+                this.bufferedLength -= contribution * 8;
+                this._offset += contribution * 8;
+                remainingLength -= contribution;
+
+                if (this._offsetIntoBuffer >= contributionBuffer.length * 8) {
+                    this._bufferIndex += 1;
+                    this._offsetIntoBuffer = 0;
+                    if (!this.retainBuffers) {
+                        this.clean();
+                    }
+                }
+
+                if (globalThis.BITSTREAM_TRACE) {
+                    console.log(`------------------------------------------------------------    readBytes(): consumed=${contribution} bytes, remaining=${remainingLength}`);
+                    console.log(`------------------------------------------------------------    readBytes(): buffered=${this.bufferedLength} bits, bufferIndex=${this._bufferIndex}, bufferOffset=${this._offsetIntoBuffer}, bufferCount=${this.buffers.length}`);
+                }
+            }
+        } else {
+
+            // Non-byte-aligned, we need to construct bytes using bit-wise operations.
+            // readSync is perfect for this 
+
+            for (let i = offset, max = Math.min(buffer.length, offset+length); i < max; ++i) {
+                if (!this.isAvailable(8))
+                    yield max - i;
+                
+                buffer[i] = this.readSync(8);
+            }
         }
 
         return buffer;
@@ -354,14 +397,20 @@ export class BitstreamReader {
             if (byteOffset >= buffer.length)
                 throw new Error(`Internal error: Current buffer (index ${bufferIndex}) has length ${buffer.length} but our position within the buffer is ${byteOffset}! offset=${this.offset}, bufs=${this.buffers.length}`);
 
-            let byte = BigInt(buffer[byteOffset]);
-            
             let bitOffset = offset % 8;
-            let bitContribution = Math.min(8 - bitOffset, remainingLength);
-            let mask = Math.pow(0x2, bitContribution) - 1;
-            
-            value = (value << BigInt(bitContribution)) | ((byte >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) & BigInt(mask));
-            
+            let bitContribution: number;
+            let byte = BigInt(buffer[byteOffset]);
+
+            // If we are byte-aligned and asking for a byte, we can do this more efficiently.
+            if (length === 8 && remainingLength === length && bitOffset === 0) {
+                value = byte;
+                bitContribution = 8;
+            } else {
+                bitContribution = Math.min(8 - bitOffset, remainingLength);
+                let mask = Math.pow(0x2, bitContribution) - 1;
+                value = (value << BigInt(bitContribution)) | ((byte >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) & BigInt(mask));
+            }
+
             // update counters
 
             offset += bitContribution;
