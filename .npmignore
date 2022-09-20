@@ -6,5 +6,7 @@ src/**/*.test.ts
 dist/test.js
 dist/**/*.test.js
 src/benchmark.ts
+src/benchmark-utils.ts
 dist/benchmark.js
+dist/benchmark-utils.js
 scripts/**

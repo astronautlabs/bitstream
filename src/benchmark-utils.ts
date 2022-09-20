@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import { Readable } from "stream";
 
 export async function runTest(test: Test): Promise<TestResult> {
