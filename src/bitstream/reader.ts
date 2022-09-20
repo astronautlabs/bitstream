@@ -94,10 +94,19 @@ export class BitstreamReader {
      * Remove any fully used up buffers. Only has an effect if retainBuffers is true.
      * Optional `count` parameter lets you control how many buffers can be freed.
      */
-    clean(count?) {
-        let buffers = this.buffers.splice(0, count !== void 0 ? Math.min(count, this._bufferIndex) : this._bufferIndex);
-        this._spentBufferSize += buffers.map(b => b.length * 8).reduce((pv, cv) => pv + cv, 0);
-        this._bufferIndex -= buffers.length;
+    clean(count?: number) {
+        /**
+         * PERFORMANCE SENSITIVE
+         * Previous versions of this function caused as much as an 18% overhead on top of simple 
+         * byte-aligned reads.
+         */
+        let spent = count !== void 0 ? Math.min(count, this._bufferIndex) : this._bufferIndex;
+        for (let i = 0, max = spent; i < max; ++i) {
+            this._spentBufferSize += this.buffers[0].length * 8;
+            this.buffers.shift();
+        }
+
+        this._bufferIndex -= spent;
     }
 
     /**
@@ -369,20 +378,41 @@ export class BitstreamReader {
             return view.getFloat64(0, false);
     }
 
+    private readByteAligned(consume: boolean): number {
+        let buffer = this.buffers[this._bufferIndex];
+        let value = buffer[this._offsetIntoBuffer / 8 | 0];
+
+        if (consume) {
+            this.bufferedLength -= 8;
+            this._offsetIntoBuffer += 8;
+            this._offset += 8;
+            if (this._offsetIntoBuffer >= buffer.length * 8) {
+                this._bufferIndex += 1;
+                this._offsetIntoBuffer = 0;
+                if (!this.retainBuffers) {
+                    this.clean();
+                }
+            }
+        }
+
+        return value;
+    }
+
     private readCoreSync(length : number, consume : boolean): number {
         this.ensureNoReadPending();
         
-        let value : bigint = BigInt(0);
-        let remainingLength = length;
-
         if (this.available < length)
             throw new Error(`underrun: Not enough bits are available (requested=${length}, available=${this.bufferedLength}, buffers=${this.buffers.length})`);
-        
+
         this.adjustSkip();
 
+        if (length === 8 && this._offsetIntoBuffer % 8 === 0)
+            return this.readByteAligned(consume);
+
+        let remainingLength = length;
         let offset = this._offsetIntoBuffer;
         let bufferIndex = this._bufferIndex;
-
+        let value : bigint = BigInt(0);
         let bitLength = 0;
 
         while (remainingLength > 0) {
@@ -427,9 +457,11 @@ export class BitstreamReader {
             this.bufferedLength -= length;
             this._offsetIntoBuffer = offset;
             this._offset += bitLength;
-            this._bufferIndex = bufferIndex;
-            if (!this.retainBuffers) {
-                this.clean();
+            if (this._bufferIndex !== bufferIndex) {
+                this._bufferIndex = bufferIndex;
+                if (!this.retainBuffers) {
+                    this.clean();
+                }
             }
         }
 

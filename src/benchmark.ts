@@ -99,31 +99,39 @@ class Generator extends Readable {
     }
 }
 
+function formatBytes(bytes: number) {
+    if (bytes > 1024 * 1024 * 1024) {
+        return `${Math.floor(bytes / 1024 / 1024 / 1024 * 100) / 100} GiB`;
+    } else if (bytes > 1024 * 1024) {
+        return `${Math.floor(bytes / 1024 / 1024 * 100) / 100} MiB`;
+    } else if (bytes > 1024) {
+        return `${Math.floor(bytes / 1024 * 100) / 100} KiB`;
+    } else {
+        return `${Math.floor(bytes * 100) / 100} B`;
+    }
+}
+
 function syncTest() {
-    let generator = new Generator();
     let bitstream = new BitstreamReader();
-    let counter = new FPSCounter('hits');
+    let iterations = 5;
 
-    counter.start(5*1000);
-    generator.on('data', data => {
+    for (let i = 0; i < iterations; ++i) {
+        let data = Buffer.alloc(1000 * 1024 * 1024, 123);
         bitstream.addBuffer(data);
-        let min = Infinity, max = 0;
-        let totalStart = performance.now();
 
-        for (let i = 0; i < data.length; ++i) {
-            let start = performance.now();
+        let read = 0;
+        let max = data.length;
+        console.log(`Iteration ${i + 1}: Reading ${formatBytes(data.length)}...`);
+
+        let start = Date.now();
+        for (; read < max; ++read) {
             let byte = bitstream.readSync(8);
-            let time = performance.now() - start;
-
-            min = Math.min(min, time);
-            max = Math.max(max, time);
-
-            counter.hit();
         }
 
-        let total = performance.now() - totalStart;
-        console.log(`min=${min}ms, max=${max}ms, total=${total}ms`);
-    });
+        let time = Date.now() - start;
+
+        console.log(`    Read ${formatBytes(read)} over ${time / 1000} seconds (${formatBytes(read / (time / 1000))}/s)`);
+    }
 }
 
 async function asyncTest() {
