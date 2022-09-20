@@ -1,5 +1,7 @@
 import { StringEncodingOptions } from "./string-encoding-options";
 
+let maskMap: Map<number, number>;
+
 /**
  * Represents a request to read a number of bits
  */
@@ -351,6 +353,19 @@ export class BitstreamReader {
         return (u & signBit) === 0 ? u : -((~(u - 1) & mask) >>> 0);
     }
 
+    private maskOf(bits: number) {
+        if (!maskMap) {
+            maskMap = new Map();
+            for (let i = 0; i <= 64; ++i) {
+                maskMap.set(i, Math.pow(0x2, i) - 1);
+            }
+        }
+
+        return maskMap.get(bits) ?? (Math.pow(0x2, bits) - 1);
+    }
+
+
+    
     /**
      * Read an IEEE 754 floating point value with the given bit length (32 or 64). If there are not 
      * enough bits available, an error is thrown.
@@ -380,7 +395,7 @@ export class BitstreamReader {
 
     private readByteAligned(consume: boolean): number {
         let buffer = this.buffers[this._bufferIndex];
-        let value = buffer[this._offsetIntoBuffer / 8 | 0];
+        let value = buffer[this._offsetIntoBuffer / 8];
 
         if (consume) {
             this.bufferedLength -= 8;
@@ -398,6 +413,121 @@ export class BitstreamReader {
         return value;
     }
 
+    private consume(length: number) {
+        this.bufferedLength -= length;
+        this._offsetIntoBuffer += length;
+        this._offset += length;
+
+        let buffer = this.buffers[this._bufferIndex];
+        while (buffer && this._offsetIntoBuffer >= (buffer.length * 8)) {
+            this._bufferIndex += 1;
+            this._offsetIntoBuffer -= buffer.length * 8;
+            buffer = this.buffers[this._bufferIndex];
+            if (!this.retainBuffers)
+                this.clean();
+        }
+    }
+
+    private readShortByteAligned(consume: boolean): number {
+        let buffer = this.buffers[this._bufferIndex];
+        let bufferOffset = this._offsetIntoBuffer / 8;
+        let firstByte = buffer[bufferOffset];
+        let secondByte: number;
+
+        if (bufferOffset + 1 >= buffer.length)
+            secondByte = this.buffers[this._bufferIndex + 1][0];
+        else
+            secondByte = buffer[bufferOffset + 1];
+
+        if (consume)
+            this.consume(16);
+
+        return firstByte << 8 | secondByte;
+    }
+
+    private readLongByteAligned(consume: boolean): number {
+        let bufferIndex = this._bufferIndex;
+        let buffer = this.buffers[bufferIndex];
+        let bufferOffset = this._offsetIntoBuffer / 8;
+
+        let firstByte = buffer[bufferOffset++];
+        if (bufferOffset >= buffer.length) {
+            buffer = this.buffers[++bufferIndex];
+            bufferOffset = 0;
+        }
+
+        let secondByte = buffer[bufferOffset++];
+        if (bufferOffset >= buffer.length) {
+            buffer = this.buffers[++bufferIndex];
+            bufferOffset = 0;
+        }
+
+        let thirdByte = buffer[bufferOffset++];
+        if (bufferOffset >= buffer.length) {
+            buffer = this.buffers[++bufferIndex];
+            bufferOffset = 0;
+        }
+
+        let fourthByte = buffer[bufferOffset++];
+        if (bufferOffset >= buffer.length) {
+            buffer = this.buffers[++bufferIndex];
+            bufferOffset = 0;
+        }
+
+        if (consume)
+            this.consume(32);
+
+        let highBit = ((firstByte & 0x80) !== 0);
+        firstByte &= ~0x80;
+
+        let value = firstByte << 24 | secondByte << 16 | thirdByte << 8 | fourthByte;
+
+        if (highBit)
+            value += 2**31;
+        
+        return value;
+    }
+
+    private read3ByteAligned(consume: boolean): number {
+        let bufferIndex = this._bufferIndex;
+        let buffer = this.buffers[bufferIndex];
+        let bufferOffset = this._offsetIntoBuffer / 8;
+
+        let firstByte = buffer[bufferOffset++];
+        if (bufferOffset >= buffer.length) {
+            buffer = this.buffers[++bufferIndex];
+            bufferOffset = 0;
+        }
+
+        let secondByte = buffer[bufferOffset++];
+        if (bufferOffset >= buffer.length) {
+            buffer = this.buffers[++bufferIndex];
+            bufferOffset = 0;
+        }
+
+        let thirdByte = buffer[bufferOffset++];
+        if (bufferOffset >= buffer.length) {
+            buffer = this.buffers[++bufferIndex];
+            bufferOffset = 0;
+        }
+
+        if (consume)
+            this.consume(24);
+
+        return firstByte << 16 | secondByte << 8 | thirdByte;
+    }
+
+    private readPartialByte(length: number, consume: boolean) {
+        let buffer = this.buffers[this._bufferIndex];
+        let byte = buffer[Math.floor(this._offsetIntoBuffer / 8)];
+        let bitOffset = this._offsetIntoBuffer % 8 | 0;
+
+        if (consume)
+            this.consume(length);
+
+        return ((byte >> (8 - length - bitOffset)) & this.maskOf(length)) | 0;
+    }
+
     private readCoreSync(length : number, consume : boolean): number {
         this.ensureNoReadPending();
         
@@ -406,14 +536,32 @@ export class BitstreamReader {
 
         this.adjustSkip();
 
-        if (length === 8 && this._offsetIntoBuffer % 8 === 0)
-            return this.readByteAligned(consume);
+        let offsetIntoByte = this._offsetIntoBuffer % 8;
+
+        // Optimization cases //////////////////////////////////////////////////////////////////////////////
+
+        if (offsetIntoByte === 0) {
+            if (length === 8)           // Reading exactly one byte
+                return this.readByteAligned(consume);
+            else if (length === 16)          // Reading a 16-bit value at byte boundary
+                return this.readShortByteAligned(consume);
+            else if (length === 24)
+                return this.read3ByteAligned(consume);
+            else if (length === 32)          // Reading a 32-bit value at byte boundary
+                return this.readLongByteAligned(consume);
+        }
+
+        if (length < 8 && ((8 - offsetIntoByte) | 0) >= length)     // Reading less than 8 bits within a single byte
+            return this.readPartialByte(length, consume);
+
+        // The remaining path covers reads which are larger than one byte or which cross over byte boundaries.
 
         let remainingLength = length;
         let offset = this._offsetIntoBuffer;
         let bufferIndex = this._bufferIndex;
-        let value : bigint = BigInt(0);
-        let bitLength = 0;
+        let bigValue: bigint = BigInt(0);
+        let value: number = 0;
+        let useBigInt = length > 31;
 
         while (remainingLength > 0) {
             /* istanbul ignore next */
@@ -429,23 +577,24 @@ export class BitstreamReader {
 
             let bitOffset = offset % 8;
             let bitContribution: number;
-            let byte = BigInt(buffer[byteOffset]);
-
-            // If we are byte-aligned and asking for a byte, we can do this more efficiently.
-            if (length === 8 && remainingLength === length && bitOffset === 0) {
-                value = byte;
-                bitContribution = 8;
+            let byte = buffer[byteOffset];
+            
+            bitContribution = Math.min(8 - bitOffset, remainingLength);
+            
+            if (useBigInt) {
+                bigValue = (bigValue << BigInt(bitContribution)) 
+                    | ((BigInt(buffer[byteOffset]) >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) 
+                        & BigInt(this.maskOf(bitContribution)));
             } else {
-                bitContribution = Math.min(8 - bitOffset, remainingLength);
-                let mask = Math.pow(0x2, bitContribution) - 1;
-                value = (value << BigInt(bitContribution)) | ((byte >> (BigInt(8) - BigInt(bitContribution) - BigInt(bitOffset))) & BigInt(mask));
+                value = (value << bitContribution) 
+                    | ((byte >> (8 - bitContribution - bitOffset)) 
+                        & this.maskOf(bitContribution));
             }
 
             // update counters
 
             offset += bitContribution;
-            remainingLength -= bitContribution;
-            bitLength += bitContribution;
+            remainingLength -= bitContribution | 0;
 
             if (offset >= buffer.length*8) {
                 bufferIndex += 1;
@@ -453,19 +602,13 @@ export class BitstreamReader {
             }
         }
 
-        if (consume) {
-            this.bufferedLength -= length;
-            this._offsetIntoBuffer = offset;
-            this._offset += bitLength;
-            if (this._bufferIndex !== bufferIndex) {
-                this._bufferIndex = bufferIndex;
-                if (!this.retainBuffers) {
-                    this.clean();
-                }
-            }
-        }
+        if (consume)
+            this.consume(length);
 
-        return Number(value);
+        if (useBigInt)
+            return Number(bigValue);
+        else
+            return value;
     }
 
     private adjustSkip() {

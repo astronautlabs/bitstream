@@ -647,3 +647,56 @@ describe('BitstreamReader', it => {
         expect(Array.from(buf2)).to.eql([ 12, 42, 15 ]);
     });
 });
+
+describe('BitstreamReader (generated)', it => {
+    for (let size = 1; size <= 52; ++size) {
+        it(`reads ${size}bit values correctly`, async () => {
+            let offset = 64 - size;
+            let buf = new ArrayBuffer(8);
+            let view = new DataView(buf);
+
+            for (let i = 0; i < 10; ++i) {
+                let num = Math.floor(Math.random() * 2**size);
+                view.setBigUint64(0, BigInt(num), false);
+                let reader = new BitstreamReader();
+                reader.addBuffer(new Uint8Array(buf));
+                reader.readSync(offset);
+                expect(reader.readSync(size), `Test number #${i} (${num}) should have been read properly`).to.equal(num);
+            }
+        });
+    }
+
+    for (let size = 1; size < 52; ++size) {
+        it(`reads cross-byte ${size}bit values correctly [1-bit offset]`, async () => {
+            let offset = 64 - size;
+            let buf = new ArrayBuffer(8);
+            let view = new DataView(buf);
+
+            for (let i = 0; i < 10; ++i) {
+                let num = Math.floor(Math.random() * 2**size);
+                view.setBigUint64(0, BigInt(num) << BigInt(1), false);
+                let reader = new BitstreamReader();
+                reader.addBuffer(new Uint8Array(buf));
+                reader.readSync(offset - 1);
+                expect(reader.readSync(size), `Test number #${i} (${num}) should have been read properly`).to.equal(num);
+            }
+        });
+    }
+
+    for (let size = 1; size < 49; ++size) {
+        it(`reads cross-byte ${size}bit values correctly [4-bit offset]`, async () => {
+            let offset = 64 - size;
+            let buf = new ArrayBuffer(8);
+            let view = new DataView(buf);
+
+            for (let i = 0; i < 10; ++i) {
+                let num = Math.floor(Math.random() * 2**size);
+                view.setBigUint64(0, BigInt(num) << BigInt(4), false);
+                let reader = new BitstreamReader();
+                reader.addBuffer(new Uint8Array(buf));
+                reader.readSync(offset - 4);
+                expect(reader.readSync(size), `Test number #${i} (${num}) should have been read properly`).to.equal(num);
+            }
+        });
+    }
+});
