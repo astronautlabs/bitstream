@@ -9,7 +9,7 @@
         "experimentalDecorators": true,
         "sourceMap": true,
         "esModuleInterop": true,
-        "lib": ["ES2022"]
+        "lib": ["DOM", "ES2022"]
     },
     "include": [
         "./src/**/*.ts"
