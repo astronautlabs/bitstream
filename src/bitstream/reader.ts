@@ -251,27 +251,23 @@ export class BitstreamReader {
                 console.log(`------------------------------------------------------------    readBytes(): Pre-operation: buffered=${this.bufferedLength} bits, bufferIndex=${this._bufferIndex}, bufferOffset=${this._offsetIntoBuffer}, bufferLength=${this.buffers[this._bufferIndex]?.length || '<none>'} bufferCount=${this.buffers.length}`);
             }
             let remainingLength = length;
+            let destBufferOffset = 0;
             while (remainingLength > 0) {
-                if (this.bufferedLength < remainingLength * 8)
-                    yield Math.max((remainingLength * 8 - this.bufferedLength) / 8);
+                if (this.available < remainingLength * 8)
+                    yield Math.max((remainingLength * 8 - this.available) / 8);
 
                 let bufferOffset = Math.floor(this._offsetIntoBuffer / 8);
                 let contributionBuffer = this.buffers[this._bufferIndex];
                 let contribution = Math.min(remainingLength, contributionBuffer.length);
-                buffer.set(contributionBuffer.slice(bufferOffset, bufferOffset + contribution));
 
-                this._offsetIntoBuffer += contribution * 8;
-                this.bufferedLength -= contribution * 8;
-                this._offset += contribution * 8;
-                remainingLength -= contribution;
+                for (let i = 0; i < contribution; ++i)
+                    buffer[destBufferOffset + i] = contributionBuffer[bufferOffset + i];
 
-                if (this._offsetIntoBuffer >= contributionBuffer.length * 8) {
-                    this._bufferIndex += 1;
-                    this._offsetIntoBuffer = 0;
-                    if (!this.retainBuffers) {
-                        this.clean();
-                    }
-                }
+                destBufferOffset += contribution;
+
+                let contributionBits = contribution * 8;
+                this.consume(contributionBits);
+                remainingLength -= contributionBits;
 
                 if (globalThis.BITSTREAM_TRACE) {
                     console.log(`------------------------------------------------------------    readBytes(): consumed=${contribution} bytes, remaining=${remainingLength}`);
