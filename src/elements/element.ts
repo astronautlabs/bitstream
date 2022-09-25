@@ -1051,7 +1051,7 @@ export class BitstreamElement {
         let result = generator.next();
 
         if (result.done === false)
-            throw new Error(`Not enough bits: Reached end of buffer while trying to read ${result.value} bits!`);
+            throw new Error(`Not enough bits: Reached end of buffer while trying to read ${result.value.remaining} bits! Context: ${result.value.contextHint()}`);
         return result.value;
     }
 
