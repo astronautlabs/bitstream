@@ -4,6 +4,8 @@ import "source-map-support/register";
 import { FPSCounter, Generator, runTests } from './benchmark-utils';
 import { BitstreamReader } from './bitstream';
 
+globalThis.BITSTREAM_TRACE = false;
+
 runTests([
     { 
         name: 'byteAlignedReads-8bit', 
@@ -118,6 +120,25 @@ runTests([
                 bitstream.readSync(4);
             let time = Date.now() - start;
             return read / (time / 1000);
+        }
+    },
+    {
+        name: 'readBytesAligned-32',
+        unit: 'bytes', suffix: '/s',
+        func() {
+            let bitstream = new BitstreamReader();
+            let data = Buffer.alloc(600 * 1024 * 1024, 123);
+            bitstream.addBuffer(data);
+        
+            let read = 0;
+            let max = data.length / 32;
+            let buf = Buffer.alloc(32);
+            let start = Date.now();
+        
+            for (; read < max; ++read)
+                bitstream.readBytesSync(buf);
+            let time = Date.now() - start;
+            return read * 32 / (time / 1000);
         }
     }
 ]);
