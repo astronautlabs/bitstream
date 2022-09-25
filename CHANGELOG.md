@@ -1,3 +1,9 @@
+# v4.1.3
+- Performance: Substantial optimizations around byte-aligned reads, partial byte-aligned reads, byte array reads, and
+  other scenarios. In some scenarios, performance can be 10x faster, and in the case of reading byte-aligned byte arrays, 
+  the improvement is somewhere in the realm of 500x faster. This is a common scenario in data-heavy parsers such as 
+  audio/video formats.
+
 # v4.1.2
 - Performance: `serialize()` now uses a 1KB buffer by default, previously the default buffer size was 1 byte. This yields a 
   massive performance increase when writing large objects using `serialize()`
