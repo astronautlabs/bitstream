@@ -31,23 +31,34 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
             options 
         }
 
+        let fieldDesc = `${containingType.name}#${String(field.name)}`;
         let BufferT = typeof Buffer !== 'undefined' ? Buffer : undefined;
         if ((field.type === BufferT || field.type === Uint8Array) && typeof field.length === 'number' && field.length % 8 !== 0)
-            throw new Error(`${containingType.name}#${String(field.name)}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
+            throw new Error(`${fieldDesc}: Length (${field.length}) must be a multiple of 8 when field type is Buffer`);
 
         if (field.type === Array) {
             if (!field.options.array?.type)
-                throw new Error(`${containingType.name}#${String(field.name)}: Array field must specify option array.type`);
+                throw new Error(`${fieldDesc}: Array field must specify option array.type`);
             if (!(field.options.array?.type.prototype instanceof BitstreamElement) && field.options.array?.type !== Number)
-                throw new Error(`${containingType.name}#${String(field.name)}: Array fields can only be used with types which inherit from BitstreamElement`);
+                throw new Error(`${fieldDesc}: Array fields can only be used with types which inherit from BitstreamElement`);
             if (field.options.array?.countFieldLength) {
                 if (typeof field.options.array.countFieldLength !== 'number' || field.options.array.countFieldLength <= 0)
-                    throw new Error(`${containingType.name}#${String(field.name)}: Invalid value provided for length of count field: ${field.options.array.countFieldLength}. Must be a positive number.`);
+                    throw new Error(`${fieldDesc}: Invalid value provided for length of count field: ${field.options.array.countFieldLength}. Must be a positive number.`);
             }
 
             if (field.options.array?.count) {
                 if (typeof field.options.array.count !== 'number' && typeof field.options.array.count !== 'function')
                     throw new Error(`${containingType.name}#${String(field.name)}: Invalid value provided for count determinant: ${field.options.array.count}. Must be a number or function`);
+            }
+        }
+
+        if (field.type === Number) {
+            if (typeof field.length === 'number' && field.length > 53 && !field.options.number?.allowOversized) {
+                throw new Error(
+                    `${fieldDesc}: It is not safe to use the 'number' type for fields larger than 53 bits. `
+                    + `Consider using 'bigint' instead. `
+                    + `If you are sure this is what you want, set option number.allowOversized.`
+                );
             }
         }
 

@@ -16,4 +16,9 @@ export interface NumberOptions {
      *   length is a multiple of 8 bits (ie it contains 1 or more whole bytes)
      */
     byteOrder? : 'big-endian' | 'little-endian';
+
+    /**
+     * Allow using the 'number' type on fields longer than 53 bits. Consider using bigint instead of this option.
+     */
+    allowOversized?: boolean;
 }
