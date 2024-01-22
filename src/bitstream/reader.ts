@@ -424,7 +424,7 @@ export class BitstreamReader {
         }
     }
 
-    private readShortByteAligned(consume: boolean): number {
+    private readShortByteAligned(consume: boolean, byteOrder: 'lsb' | 'msb'): number {
         let buffer = this.buffers[this._bufferIndex];
         let bufferOffset = this._offsetIntoBuffer / 8;
         let firstByte = buffer[bufferOffset];
@@ -438,10 +438,16 @@ export class BitstreamReader {
         if (consume)
             this.consume(16);
 
+        if (byteOrder === 'lsb') {
+            let carry = firstByte;
+            firstByte = secondByte;
+            secondByte = carry;
+        }
+
         return firstByte << 8 | secondByte;
     }
 
-    private readLongByteAligned(consume: boolean): number {
+    private readLongByteAligned(consume: boolean, byteOrder: 'lsb' | 'msb'): number {
         let bufferIndex = this._bufferIndex;
         let buffer = this.buffers[bufferIndex];
         let bufferOffset = this._offsetIntoBuffer / 8;
@@ -476,6 +482,18 @@ export class BitstreamReader {
         let highBit = ((firstByte & 0x80) !== 0);
         firstByte &= ~0x80;
 
+        if (byteOrder === 'lsb') {
+            let b1 = fourthByte;
+            let b2 = thirdByte;
+            let b3 = secondByte;
+            let b4 = firstByte;
+
+            firstByte = b1;
+            secondByte = b2;
+            thirdByte = b3;
+            fourthByte = b4;
+        }
+
         let value = firstByte << 24 | secondByte << 16 | thirdByte << 8 | fourthByte;
 
         if (highBit)
@@ -484,7 +502,7 @@ export class BitstreamReader {
         return value;
     }
 
-    private read3ByteAligned(consume: boolean): number {
+    private read3ByteAligned(consume: boolean, byteOrder: 'lsb' | 'msb'): number {
         let bufferIndex = this._bufferIndex;
         let buffer = this.buffers[bufferIndex];
         let bufferOffset = this._offsetIntoBuffer / 8;
@@ -510,6 +528,12 @@ export class BitstreamReader {
         if (consume)
             this.consume(24);
 
+        if (byteOrder === 'lsb') {
+            let carry = firstByte;
+            firstByte = thirdByte;
+            thirdByte = carry;
+        }
+
         return firstByte << 16 | secondByte << 8 | thirdByte;
     }
 
@@ -524,7 +548,15 @@ export class BitstreamReader {
         return ((byte >> (8 - length - bitOffset)) & this.maskOf(length)) | 0;
     }
 
-    private readCoreSync(length : number, consume : boolean): number {
+    /**
+     * @param length 
+     * @param consume 
+     * @param byteOrder The byte order to use when the length is greater than 8 and is a multiple of 8. 
+     *                  Defaults to MSB (most significant byte). If the length is not a multiple of 8, 
+     *                  this is unused
+     * @returns 
+     */
+    private readCoreSync(length : number, consume : boolean, byteOrder: 'msb' | 'lsb' = 'msb'): number {
         this.ensureNoReadPending();
         
         if (this.available < length)
@@ -540,11 +572,11 @@ export class BitstreamReader {
             if (length === 8)           // Reading exactly one byte
                 return this.readByteAligned(consume);
             else if (length === 16)          // Reading a 16-bit value at byte boundary
-                return this.readShortByteAligned(consume);
+                return this.readShortByteAligned(consume, byteOrder);
             else if (length === 24)
-                return this.read3ByteAligned(consume);
+                return this.read3ByteAligned(consume, byteOrder);
             else if (length === 32)          // Reading a 32-bit value at byte boundary
-                return this.readLongByteAligned(consume);
+                return this.readLongByteAligned(consume, byteOrder);
         }
 
         if (length < 8 && ((8 - offsetIntoByte) | 0) >= length)     // Reading less than 8 bits within a single byte
