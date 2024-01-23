@@ -1,4 +1,6 @@
-# vNext
+# ⏩ vNext
+
+# v4.2.0
 
 - Type safety has been dramatically increased thanks to new inference available for decorators in Typescript 5.
   Note that this library does not use the new ES decorator standard as it relies on Typescript's 
