@@ -115,6 +115,22 @@ describe('BitstreamElement', it => {
         });
     });
 
+    it.only('can handle private fields', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) private byte1 : number;
+            @Field(8) private byte2 : number;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 123 ]));
+        setTimeout(() => reader.addBuffer(Buffer.from([ 124 ])), 10);
+
+        let result = await CustomElement.readBlocking(reader);
+
+        expect((result as any).byte1).to.equal(123);
+        expect((result as any).byte2).to.equal(124);
+    });
+
     it('can read ahead and make field presence decisions based on what\'s upcoming', () => {
         class CustomElement extends BitstreamElement {
             @Field(8) byte1 : number;
