@@ -115,7 +115,7 @@ describe('BitstreamElement', it => {
         });
     });
 
-    it.only('can handle private fields', async () => {
+    it('can handle private fields', async () => {
         class CustomElement extends BitstreamElement {
             @Field(8) private byte1 : number;
             @Field(8) private byte2 : number;
