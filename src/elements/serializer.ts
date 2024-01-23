@@ -9,6 +9,6 @@ import { FieldDefinition } from "./field-definition";
  * and use them by specifying the `serializer` option of `@Field()`
  */
 export interface Serializer {
-    read(reader : BitstreamReader, type : any, parent : BitstreamElement, field : FieldDefinition) : Generator<IncompleteReadResult, any>;
-    write(writer : BitstreamWriter, type : any, parent : BitstreamElement, field : FieldDefinition, value : any);
+    read(reader : BitstreamReader, type : Function, parent : BitstreamElement, field : FieldDefinition) : Generator<IncompleteReadResult, any>;
+    write(writer : BitstreamWriter, type : Function, parent : BitstreamElement, field : FieldDefinition, value : any);
 }

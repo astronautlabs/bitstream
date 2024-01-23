@@ -7,10 +7,10 @@ import { LengthDeterminant } from "./length-determinant";
  * @see Field 
  * @see BitstreamElement
  */
-export interface FieldDefinition<T extends BitstreamElement = BitstreamElement> {
-    length : LengthDeterminant;
+export interface FieldDefinition<T extends BitstreamElement = BitstreamElement, V = any> {
+    length : LengthDeterminant<T>;
     name : string | symbol;
     containingType : Function;
     type : Function;
-    options : FieldOptions<T>;
+    options : FieldOptions<T, V>;
 }

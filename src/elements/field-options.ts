@@ -11,11 +11,11 @@ import { BitstreamElement } from "./element";
 
 export type ReadAheadDiscriminant<T = any> = (buffer: BitstreamReader, element : T) => boolean;
 
-export interface ReadAheadOptions<T> {
+export interface ReadAheadOptions<T extends BitstreamElement> {
     /**
      * How many bits should be read before processing this field.
      */
-    length: LengthDeterminant;
+    length: LengthDeterminant<T>;
 
     /**
      * When specified, if the given discriminant returns true, the field is parsed. Otherwise it is skipped.
@@ -56,7 +56,7 @@ export type PresenceDiscriminant<T = any> = (element : T) => boolean;
 /**
  * Defines options available for properties marked with `@Field()` within BitstreamElement classes.
  */
-export interface FieldOptions<T extends BitstreamElement> {
+export interface FieldOptions<T extends BitstreamElement, V> {
     /**
      * Specify a custom serializer for this field. If not specified, this option will be 
      * filled based on the runtime type metadata available for the given field. For instance,
@@ -85,7 +85,7 @@ export interface FieldOptions<T extends BitstreamElement> {
      * determined and what element type the array is (because Typescript does not expose the type of 
      * an array field)
      */
-    array? : ArrayOptions;
+    array? : ArrayOptions<T>;
 
     /**
      * Specify options specific to Buffer fields
@@ -150,7 +150,7 @@ export interface FieldOptions<T extends BitstreamElement> {
      * correctly without having to manually update them before writing. It is also used
      * by the `@Reserved()` decorator to ensure that high bits are always written.
      */
-    writtenValue?: ValueDeterminant;
+    writtenValue?: ValueDeterminant<T, V>;
 
     /**
      * Initializer to call when constructing new instances for this field. 

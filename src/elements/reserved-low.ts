@@ -1,3 +1,4 @@
+import { InferredPropertyDecorator } from "./decorators";
 import { BitstreamElement } from "./element";
 import { Field } from "./field";
 import { FieldDefinition } from "./field-definition";
@@ -11,20 +12,17 @@ import { LengthDeterminant } from "./length-determinant";
  * @param length The bitlength determinant
  * @param options Options related to this reserved field
  */
- export function ReservedLow<T extends BitstreamElement>(length : LengthDeterminant, options? : FieldOptions<T>) {
-    if (!options)
-        options = {};
-
-    options.isIgnored = true;
-    options.writtenValue = (instance, field : FieldDefinition) => {
-        if (field.type === Number)
-            return 0;
-    };
-
-    let decorator = Field(length, options);
+export function ReservedLow<T extends BitstreamElement>(length : LengthDeterminant<T>, options : Omit<FieldOptions<T, number>, 'writtenValue' | 'isIgnored'> = {}): InferredPropertyDecorator<T>{
     return (target : T, fieldName : string | symbol) => {
         fieldName = Symbol(`[reserved: ${typeof length === 'number' ? `${length} bits` : `dynamic`}]`);
         Reflect.defineMetadata('design:type', Number, target, fieldName);
-        return decorator(target, fieldName);
+        return Field<T, number>(length, {
+            ...options,
+            isIgnored: true,
+            writtenValue: (_, field : FieldDefinition) => {
+                if (field.type === Number)
+                    return 0;
+            }
+        })(target, fieldName);
     }
 }

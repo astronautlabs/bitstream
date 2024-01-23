@@ -122,13 +122,30 @@ describe('BitstreamElement', it => {
         }
 
         let reader = new BitstreamReader();
-        reader.addBuffer(Buffer.from([ 123 ]));
-        setTimeout(() => reader.addBuffer(Buffer.from([ 124 ])), 10);
+        reader.addBuffer(Buffer.from([ 123, 124 ]));
 
         let result = await CustomElement.readBlocking(reader);
 
         expect((result as any).byte1).to.equal(123);
         expect((result as any).byte2).to.equal(124);
+    });
+
+    it('@Field() accepts single options when length is inferred', async () => {
+        class CustomElement2 extends BitstreamElement {
+            @Field(8) byte2: number;
+        }
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte1 : number;
+            @Field({}) sub : CustomElement2;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 123, 124 ]));
+
+        let result = await CustomElement.readBlocking(reader);
+
+        expect(result.byte1).to.equal(123);
+        expect(result.sub.byte2).to.equal(124);
     });
 
     it('can read ahead and make field presence decisions based on what\'s upcoming', () => {
@@ -772,6 +789,19 @@ describe('BitstreamElement', it => {
             expect(writable.buffer.length).to.equal(4);
             expect(Array.from(writable.buffer)).to.eql([1,2,3,4]);
         });
+        it('respects writtenValue', () => {
+            let writable = new BufferedWritable();
+            let writer = new BitstreamWriter(writable);
+            class Element extends BitstreamElement {
+                @Field(8*4, { writtenValue: () => Buffer.from([1,2,3,4]) }) 
+                buffer : Buffer;
+            }
+
+            new Element().with({ buffer: Buffer.from([4,3,2,1])}).write(writer);
+
+            expect(writable.buffer.length).to.equal(4);
+            expect(Array.from(writable.buffer)).to.eql([1,2,3,4]);
+        });
         it('truncates Buffer to fixed length by default', () => {
             let writable = new BufferedWritable();
             let writer = new BitstreamWriter(writable);
@@ -1017,7 +1047,7 @@ describe('BitstreamElement', it => {
             let caught;
             class CustomElement extends BitstreamElement {
                 @Field(8) charCount;
-                @Field(i => i.whoopsDoesntExist) str : string;
+                @Field(i => undefined) str : string;
                 @Field(8) afterwards;
             }
     
@@ -1942,7 +1972,7 @@ describe('BitstreamElement', it => {
             class CustomElement extends BitstreamElement {
                 @Field(8) a : number;
                 @Field(8) b : number;
-                @Field((i : CustomElement) => i.measure()) c : number;
+                @Field(i => i.measure()) c : number;
                 @Field(8) d : number;
             }
 

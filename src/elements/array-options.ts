@@ -1,8 +1,9 @@
+import { BitstreamElement } from "./element";
 import { LengthDeterminant } from "./length-determinant";
 
 export type HasMore<ArrayT = any, InstanceT = any, ParentT = any> = (array : ArrayT, element : InstanceT, parent? : ParentT) => boolean;
 
-export interface ArrayOptions {
+export interface ArrayOptions<T extends BitstreamElement> {
     /**
      * The length (in bits) of the count field which 
      * precedes the data of the array. 
@@ -25,7 +26,7 @@ export interface ArrayOptions {
      * 
      * Only one of `count`, `countFieldLength`, `hasMore` can be specified simultaneously.
      */
-    count? : LengthDeterminant;
+    count? : LengthDeterminant<T>;
 
     /**
      * Whether to read another item. When specified, the discriminant is executed before reading each item.

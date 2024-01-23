@@ -1,4 +1,5 @@
 import { Constructor } from "../common";
+import { InferredPropertyDecorator } from "./decorators";
 import { BitstreamElement } from "./element";
 import { Field } from "./field";
 import { VariantDefinition, VariantDiscriminant } from "./variant-definition";
@@ -57,6 +58,6 @@ export function DefaultVariant() {
  * fields of a variant subclass should be read relative to the other fields of the class. This can be 
  * used to "sandwich" subclass fields in a specific spot between two fields of the superclass.
  */
-export function VariantMarker() {
-    return Field(0, { isVariantMarker: true })
+export function VariantMarker<T extends BitstreamElement>(): InferredPropertyDecorator<T> {
+    return Field(0, { isVariantMarker: true });
 }

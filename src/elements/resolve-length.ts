@@ -11,7 +11,7 @@ import { FieldDefinition } from "./field-definition";
  * @param field The field definition for context
  * @returns The bitlength of the field in this context
  */
- export function resolveLength(determinant : LengthDeterminant, parent : BitstreamElement, field : FieldDefinition) {
+ export function resolveLength<T extends BitstreamElement>(determinant : LengthDeterminant<T>, parent : T, field : FieldDefinition) {
     if (typeof determinant === 'number')
         return determinant;
 

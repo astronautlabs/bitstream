@@ -1,6 +1,7 @@
 import { ArraySerializer } from "./array-serializer";
 import { BooleanSerializer } from "./boolean-serializer";
 import { BufferSerializer } from "./buffer-serializer";
+import { InferredPropertyDecorator, PropType } from "./decorators";
 import { BitstreamElement } from "./element";
 import { FieldDefinition } from "./field-definition";
 import { FieldOptions } from "./field-options";
@@ -15,7 +16,28 @@ import { StructureSerializer } from "./structure-serializer";
  * @param length The length of the field, in bits (except when the field has type Buffer or String, in which case it is in bytes)
  * @param options 
  */
-export function Field<T extends BitstreamElement>(length? : LengthDeterminant, options? : FieldOptions<T>) {
+export function Field();
+
+export function Field<T extends BitstreamElement, K extends string | symbol>(options : FieldOptions<T, PropType<T, K>>): InferredPropertyDecorator<T, K>;
+export function Field<T extends BitstreamElement, K extends string | symbol>(length : LengthDeterminant<T>): InferredPropertyDecorator<T, K>;
+export function Field<T extends BitstreamElement, K extends string | symbol>(
+    length : LengthDeterminant<T>, options : FieldOptions<T, PropType<T, K>>
+): InferredPropertyDecorator<T, K>;
+
+export function Field<T extends BitstreamElement, V>(
+    length : LengthDeterminant<T>, options : FieldOptions<T, V>
+): PropertyDecorator;
+
+export function Field<T extends BitstreamElement, K extends keyof T>(...args: any[]): PropertyDecorator {
+    let length: LengthDeterminant<T> = 0;
+    let options: FieldOptions<T, T[K]> = undefined;
+
+    if (['number', 'function'].includes(typeof args[0]))
+        length = args.shift();
+
+    if (typeof args[0] === 'object')
+        options = args.shift();
+
     if (!options)
         options = {};
     

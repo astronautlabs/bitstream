@@ -1,5 +1,10 @@
 # ⏩ vNext
 
+# v4.2.1
+- Add inference based type safety in more places. 
+- It is no longer necessary to specify a length determinant if the length is inferred (such as when declaring
+  a field of type BitstreamElement)
+
 # v4.2.0
 
 - Type safety has been dramatically increased thanks to new inference available for decorators in Typescript 5.
