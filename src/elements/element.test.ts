@@ -5,7 +5,7 @@ import { BitstreamReader, BitstreamWriter } from "../bitstream";
 import { BitstreamElement } from "./element";
 import { Field } from "./field";
 import { BufferedWritable } from "../common";
-import { DefaultVariant, VariantMarker } from ".";
+import { DefaultVariant, Reserved, VariantMarker } from ".";
 
 describe('BitstreamElement', it => {
     describe(': Casting', it => {
@@ -128,6 +128,23 @@ describe('BitstreamElement', it => {
 
         expect((result as any).byte1).to.equal(123);
         expect((result as any).byte2).to.equal(124);
+    });
+
+    it.only('@Reserved() avoids reused name mistakes', () => {
+        class A extends BitstreamElement {
+            @Reserved(8) reserved: number;
+            @Field(8) field1: number;
+        }
+
+        class B extends A {
+            @Reserved(16) reserved: number;
+            @Field(8) field2: number;
+        }
+
+        let b = B.deserialize(Buffer.from([ 0xFF, 1, 0xFF, 0XFF, 2 ]));
+
+        expect(b.field1).to.equal(1);
+        expect(b.field2).to.equal(2);
     });
 
     it('@Field() accepts single options when length is inferred', async () => {
