@@ -1,6 +1,6 @@
 {
   "name": "@astronautlabs/bitstream",
-  "version": "4.2.0",
+  "version": "4.2.1",
   "description": "Utilities for packing/unpacking fields of a bitstream",
   "main": "dist/index.js",
   "module": "dist.esm/index.js",
