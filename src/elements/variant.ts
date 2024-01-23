@@ -1,7 +1,12 @@
+import { Constructor } from "../common";
+import { BitstreamElement } from "./element";
 import { Field } from "./field";
 import { VariantDefinition, VariantDiscriminant } from "./variant-definition";
 import { VariantOptions } from "./variant-options";
 
+export interface DiscriminatedVariant {
+    variantDiscriminant?: VariantDiscriminant<BitstreamElement>;
+}
 
 /**
  * Decorator which can be applied to subclasses of a BitstreamElement class which marks the subclass 
@@ -12,11 +17,19 @@ import { VariantOptions } from "./variant-options";
  * `@VariantMarker` decorator, in which case it is performed at the point in the structure where the variant 
  * marker is placed.
  * 
+ * Note that the default type assigned to the "element" parameter of the passed variant discriminant is 
+ * actually the type that the decorator is placed on, but that's technically not correct, since the passed 
+ * value is an instance of the parent class. Right now Typescript doesn't have a way to type this, and we
+ * figured it was better to be brief and almost correct than the alternative.
+ * 
+ * If you want to ensure the type of the element pasesd to the discriminator is exactly correct, specify the 
+ * type parameter (ie `@Variant<ParentClass>(i => i.parentProperty)`) 
+ * 
  * @param discriminant A function which determines whether the Variant is valid for a given object being read
  * @param options A set of options that modify the applicability of the variant. @see VariantOptions
  */
-export function Variant<T = any>(discriminant : VariantDiscriminant<T>, options? : VariantOptions) {
-    return type => {
+export function Variant<T extends BitstreamElement>(discriminant : VariantDiscriminant<T>, options? : VariantOptions) {
+    return (type: Constructor<T> & typeof BitstreamElement & DiscriminatedVariant) => {
         let parent = Object.getPrototypeOf(type.prototype).constructor;
 
         if (!(<Object>parent).hasOwnProperty('ownVariants'))
@@ -25,7 +38,7 @@ export function Variant<T = any>(discriminant : VariantDiscriminant<T>, options?
         if (!options)
             options = {};
         
-        parent.ownVariants.push(<VariantDefinition>{ type, discriminant, options });
+        parent.ownVariants.push(<VariantDefinition<T>>{ type, discriminant, options });
         type.variantDiscriminant = discriminant;
     };
 }

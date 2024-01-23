@@ -634,12 +634,12 @@ export class BitstreamElement {
 
         if (reader) {
             if (element.options.readAhead?.presentWhen) {
-                if (!reader.simulateSync(() => element.options.readAhead.presentWhen(reader, element)))
+                if (!reader.simulateSync(() => element.options.readAhead.presentWhen(reader, instance)))
                     return false;
             }
 
             if (element.options.readAhead?.excludedWhen) {
-                if (reader.simulateSync(() => element.options.readAhead.excludedWhen(reader, element)))
+                if (reader.simulateSync(() => element.options.readAhead.excludedWhen(reader, instance)))
                     return false;
             }
         }

@@ -1,29 +1,28 @@
 import { ArraySerializer } from "./array-serializer";
 import { BooleanSerializer } from "./boolean-serializer";
+import { BufferSerializer } from "./buffer-serializer";
 import { BitstreamElement } from "./element";
+import { FieldDefinition } from "./field-definition";
 import { FieldOptions } from "./field-options";
 import { LengthDeterminant } from "./length-determinant";
 import { NullSerializer } from "./null-serializer";
 import { NumberSerializer } from "./number-serializer";
-import { resolveLength } from "./resolve-length";
 import { StringSerializer } from "./string-serializer";
 import { StructureSerializer } from "./structure-serializer";
-import { FieldDefinition } from "./field-definition";
-import { BufferSerializer } from "./buffer-serializer";
 
 /**
  * Mark a property of a BitstreamElement subclass as a field that should be read from the bitstream.
  * @param length The length of the field, in bits (except when the field has type Buffer or String, in which case it is in bytes)
  * @param options 
  */
-export function Field(length? : LengthDeterminant, options? : FieldOptions) {
+export function Field<T extends BitstreamElement>(length? : LengthDeterminant, options? : FieldOptions<T>) {
     if (!options)
         options = {};
     
-    return (target : any, fieldName : string | symbol) => {
-        let containingType = target.constructor;
+    return (target : T, fieldName : string | symbol) => {
+        let containingType = target.constructor as typeof BitstreamElement;
 
-        let field : FieldDefinition = { 
+        let field : FieldDefinition<T> = { 
             name: fieldName, 
             containingType,
             type: Reflect.getMetadata('design:type', target, fieldName),
@@ -92,6 +91,6 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
                 throw new Error(`${containingType.name}#${String(field.name)}: No serializer available for type ${field.type?.name || '<unknown>'}`);
         }
 
-        (<FieldDefinition[]>containingType.ownSyntax).push(field);
+        (<FieldDefinition<T>[]>containingType.ownSyntax).push(field);
     }
 }

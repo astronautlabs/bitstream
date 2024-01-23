@@ -3,6 +3,7 @@ import { FieldDefinition } from "./field-definition";
 import { FieldOptions } from "./field-options";
 import { LengthDeterminant } from "./length-determinant";
 import { Field } from "./field";
+import { BitstreamElement } from "./element";
 
 /**
  * Used to mark a specific field as reserved. The value in this field will be read, but will not be 
@@ -11,7 +12,7 @@ import { Field } from "./field";
  * @param length The bitlength determinant
  * @param options Options related to this reserved field
  */
- export function Reserved(length : LengthDeterminant, options? : FieldOptions) {
+ export function Reserved<T extends BitstreamElement>(length : LengthDeterminant, options? : FieldOptions<T>) {
     if (!options)
         options = {};
 
@@ -24,7 +25,7 @@ import { Field } from "./field";
     };
 
     let decorator = Field(length, options);
-    return (target : any, fieldName : string | symbol) => {
+    return (target : T, fieldName : string | symbol) => {
         fieldName = Symbol(`[reserved: ${typeof length === 'number' ? `${length} bits` : `dynamic`}]`);
         Reflect.defineMetadata('design:type', Number, target, fieldName);
         return decorator(target, fieldName);

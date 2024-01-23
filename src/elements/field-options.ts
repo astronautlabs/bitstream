@@ -7,10 +7,11 @@ import { VariantDefinition } from "./variant-definition";
 import { NumberOptions } from "./number-options";
 import { BooleanOptions } from "./boolean-options";
 import { LengthDeterminant } from "./length-determinant";
+import { BitstreamElement } from "./element";
 
-export type ReadAheadDiscriminant<T = any, U = any> = (buffer: BitstreamReader, element : T) => boolean;
+export type ReadAheadDiscriminant<T = any> = (buffer: BitstreamReader, element : T) => boolean;
 
-export interface ReadAheadOptions {
+export interface ReadAheadOptions<T> {
     /**
      * How many bits should be read before processing this field.
      */
@@ -29,7 +30,7 @@ export interface ReadAheadOptions {
      * In the case where the stream ended before the requisite number of bits became available, this discriminant is 
      * still called. It is expected that the discriminant will take care in this situation.
      */
-    presentWhen?: ReadAheadDiscriminant;
+    presentWhen?: ReadAheadDiscriminant<T>;
 
     /**
      * When specified, if the given discriminant returns true, the field is skipped. Otherwise it is parsed.
@@ -44,7 +45,7 @@ export interface ReadAheadOptions {
      * In the case where the stream ended before the requisite number of bits became available, this discriminant is 
      * still called. It is expected that the discriminant will take care in this situation.
      */
-    excludedWhen?: ReadAheadDiscriminant;
+    excludedWhen?: ReadAheadDiscriminant<T>;
 }
 
 /**
@@ -55,7 +56,7 @@ export type PresenceDiscriminant<T = any> = (element : T) => boolean;
 /**
  * Defines options available for properties marked with `@Field()` within BitstreamElement classes.
  */
-export interface FieldOptions {
+export interface FieldOptions<T extends BitstreamElement> {
     /**
      * Specify a custom serializer for this field. If not specified, this option will be 
      * filled based on the runtime type metadata available for the given field. For instance,
@@ -101,26 +102,26 @@ export interface FieldOptions {
      * Allows for reading a certain number of bits from the bitstream ahead of attempting to read this field.
      * This can be used to make parsing decisions on upcoming data.
      */
-    readAhead?: ReadAheadOptions;
+    readAhead?: ReadAheadOptions<T>;
 
     /**
      * Define a function that indicates when the field is present within the bitstream. This is the opposite
      * of `excludedWhen`.
      */
-    presentWhen? : PresenceDiscriminant;
+    presentWhen? : PresenceDiscriminant<T>;
 
     /**
      * Define a function that indicates when the field is absent within the bitstream. This is the opposite 
      * of `presentWhen`.
      */
-    excludedWhen? : PresenceDiscriminant;
+    excludedWhen? : PresenceDiscriminant<T>;
 
     /**
      * Specify a set of subclasses which should be considered when variating this field. When not specified,
      * all subclasses marked with `@Variant` are considered, this option lets you narrow the options in specific
      * cases
      */
-    variants? : (Function | VariantDefinition)[];
+    variants? : (Function | VariantDefinition<T>)[];
 
     /**
      * Specify a set of subfields (by field name) that should be skipped when serializing this field.

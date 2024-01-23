@@ -1,3 +1,4 @@
+import { BitstreamElement } from "./element";
 import { Field } from "./field";
 import { FieldDefinition } from "./field-definition";
 import { FieldOptions } from "./field-options";
@@ -10,7 +11,7 @@ import { LengthDeterminant } from "./length-determinant";
  * @param length The bitlength determinant
  * @param options Options related to this reserved field
  */
- export function ReservedLow(length : LengthDeterminant, options? : FieldOptions) {
+ export function ReservedLow<T extends BitstreamElement>(length : LengthDeterminant, options? : FieldOptions<T>) {
     if (!options)
         options = {};
 
@@ -21,7 +22,7 @@ import { LengthDeterminant } from "./length-determinant";
     };
 
     let decorator = Field(length, options);
-    return (target : any, fieldName : string | symbol) => {
+    return (target : T, fieldName : string | symbol) => {
         fieldName = Symbol(`[reserved: ${typeof length === 'number' ? `${length} bits` : `dynamic`}]`);
         Reflect.defineMetadata('design:type', Number, target, fieldName);
         return decorator(target, fieldName);

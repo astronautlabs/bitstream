@@ -1,3 +1,4 @@
+import { BitstreamElement } from "./element";
 import { FieldOptions } from "./field-options";
 import { LengthDeterminant } from "./length-determinant";
 
@@ -6,10 +7,10 @@ import { LengthDeterminant } from "./length-determinant";
  * @see Field 
  * @see BitstreamElement
  */
-export interface FieldDefinition {
+export interface FieldDefinition<T extends BitstreamElement = BitstreamElement> {
     length : LengthDeterminant;
     name : string | symbol;
     containingType : Function;
     type : Function;
-    options : FieldOptions;
+    options : FieldOptions<T>;
 }

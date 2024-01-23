@@ -1,5 +1,11 @@
 # vNext
 
+- Type safety has been dramatically increased thanks to new inference available for decorators in Typescript 5.
+  Note that this library does not use the new ES decorator standard as it relies on Typescript's 
+  `--emitDecoratorMetadata` functionality which has no equivalent yet when using standardized decorators.
+  If you are using Typescript 4 you may experience issues around discriminators in fields and variants as the 
+  types of element values gets upgraded to `BitstreamElement` from `any`, but not all the way to the specific 
+  subclass you are applying the decorator to as it does in Typescript 5.
 - The `BitstreamRequest` interface, which is used internally to track pending reads, is no longer exported. This 
   interface previously had no use for consumers of the library and was exported accidentally, so this is not 
   considered a breaking change.
