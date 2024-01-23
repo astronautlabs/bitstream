@@ -48,8 +48,15 @@ export function Field(length? : LengthDeterminant, options? : FieldOptions) {
 
             if (field.options.array?.count) {
                 if (typeof field.options.array.count !== 'number' && typeof field.options.array.count !== 'function')
-                    throw new Error(`${containingType.name}#${String(field.name)}: Invalid value provided for count determinant: ${field.options.array.count}. Must be a number or function`);
+                    throw new Error(`${fieldDesc}: Invalid value provided for count determinant: ${field.options.array.count}. Must be a number or function`);
             }
+        }
+
+        if (field.options.readAhead) {
+            if (field.options.readAhead === undefined)
+                throw new Error(`${fieldDesc}: To use the readAhead option, you must specify readAhead.length`);
+            if (!['number', 'function'].includes(typeof field.options.readAhead.length))
+                throw new Error(`${fieldDesc}: Invalid read-ahead length specified (must be a number or discriminant function)`);
         }
 
         if (field.type === Number) {

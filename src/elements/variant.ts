@@ -1,6 +1,5 @@
-import { Constructor, Discriminant } from "../common";
 import { Field } from "./field";
-import { VariantDefinition } from "./variant-definition";
+import { VariantDefinition, VariantDiscriminant } from "./variant-definition";
 import { VariantOptions } from "./variant-options";
 
 
@@ -16,7 +15,7 @@ import { VariantOptions } from "./variant-options";
  * @param discriminant A function which determines whether the Variant is valid for a given object being read
  * @param options A set of options that modify the applicability of the variant. @see VariantOptions
  */
-export function Variant<T = any>(discriminant : Discriminant<T>, options? : VariantOptions) {
+export function Variant<T = any>(discriminant : VariantDiscriminant<T>, options? : VariantOptions) {
     return type => {
         let parent = Object.getPrototypeOf(type.prototype).constructor;
 

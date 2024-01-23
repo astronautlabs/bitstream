@@ -5,12 +5,14 @@ let maskMap: Map<number, number>;
 /**
  * Represents a request to read a number of bits
  */
-export interface BitstreamRequest {
+interface BitstreamRequest {
     resolve : (buffer : number) => void;
+    reject: (error: Error) => void;
+    promise: Promise<number>;
     length : number;
     signed? : boolean;
     float? : boolean;
-    peek : boolean;
+    assure? : boolean;
 }
 
 /**
@@ -81,6 +83,40 @@ export class BitstreamReader {
 
             offsetIntoBuffer -= size;
             ++bufferIndex;
+        }
+    }
+
+    /**
+     * Run a function which can synchronously read bits without affecting the read head after the function 
+     * has finished.
+     * @param func 
+     */
+    simulateSync<T>(func: () => T) {
+        let oldRetainBuffers = this.retainBuffers;
+        let originalOffset = this.offset;
+        this.retainBuffers = true;
+        try {
+            return func();
+        } finally {
+            this.retainBuffers = oldRetainBuffers;
+            this.offset = originalOffset;
+        }
+    }
+
+    /**
+     * Run a function which can asynchronously read bits without affecting the read head after the function 
+     * has finished.
+     * @param func 
+     */
+    async simulate<T>(func: () => Promise<T>) {
+        let oldRetainBuffers = this.retainBuffers;
+        let originalOffset = this.offset;
+        this.retainBuffers = true;
+        try {
+            return await func();
+        } finally {
+            this.retainBuffers = oldRetainBuffers;
+            this.offset = originalOffset;
         }
     }
 
@@ -662,20 +698,25 @@ export class BitstreamReader {
     /**
      * Wait until the given number of bits is available
      * @param length The number of bits to wait for
-     * @returns A promise which will resolve once the given number of bits is available
+     * @param optional When true, the returned promise will resolve even if the stream ends before all bits are 
+     *                 available. Otherwise, the promise will reject. 
+     * @returns A promise which will resolve when the requested number of bits are available. Rejects if the stream 
+     *          ends before the request is satisfied, unless optional parameter is true. 
      */
-    assure(length : number) : Promise<void> {
+    assure(length : number, optional = false) : Promise<void> {
         this.ensureNoReadPending();
 
         if (this.bufferedLength >= length) {
             return Promise.resolve();
         }
 
-        let request : BitstreamRequest = { resolve: null, length, peek: true };
-        let promise = new Promise<number>(resolve => request.resolve = resolve);
-        this.blockedRequest = request;
-        return promise.then(() => {});
+        return this.block({ length, assure: true }).then(available => {
+            if (available < length && !optional)
+                throw this.endOfStreamError(length);
+        });
     }
+
+
 
     /**
      * Read an unsigned integer with the given bit length, waiting until enough bits are 
@@ -690,10 +731,7 @@ export class BitstreamReader {
         if (this.available >= length) {
             return Promise.resolve(this.readSync(length));
         } else {
-            let request : BitstreamRequest = { resolve: null, length, peek: false };
-            let promise = new Promise<number>(resolve => request.resolve = resolve);
-            this.blockedRequest = request;
-            return promise;
+            return this.block({ length });
         }
     }
 
@@ -710,11 +748,32 @@ export class BitstreamReader {
         if (this.available >= length) {
             return Promise.resolve(this.readSignedSync(length));
         } else {
-            let request : BitstreamRequest = { resolve: null, length, peek: false, signed: true };
-            let promise = new Promise<number>(resolve => request.resolve = resolve);
-            this.blockedRequest = request;
-            return promise;
+            return this.block({ length, signed: true });
         }
+    }
+
+    private promise<T>() {
+        let resolve: (value: T) => void;
+        let reject: (error: Error) => void;
+        let promise = new Promise<T>((rs, rj) => (resolve = rs, reject = rj));
+        return { promise, resolve, reject };
+    }
+
+    private block(request: Omit<BitstreamRequest, 'resolve' | 'reject' | 'promise'>): Promise<number> {
+        if (this._ended) {
+            if (request.assure) {
+                return Promise.resolve(this.available);
+            } else {
+                return Promise.reject(this.endOfStreamError(request.length));
+            }
+        }
+
+        this.blockedRequest = {
+            ...request,
+            ...this.promise<number>()
+        };
+
+        return this.blockedRequest.promise;
     }
 
     /**
@@ -731,10 +790,7 @@ export class BitstreamReader {
         if (this.available >= length) {
             return Promise.resolve(this.readFloatSync(length));
         } else {
-            let request : BitstreamRequest = { resolve: null, length, peek: false, float: true };
-            let promise = new Promise<number>(resolve => request.resolve = resolve);
-            this.blockedRequest = request;
-            return promise;
+            return this.block({ length, float: true });
         }
     }
 
@@ -754,6 +810,9 @@ export class BitstreamReader {
      * @param buffer The buffer to add to the bitstream
      */
     addBuffer(buffer : Uint8Array) {
+        if (this._ended)
+            throw new Error(`Cannot add buffers to a reader which has been marked as ended without calling reset() first`);
+
         this.buffers.push(buffer);
         this.bufferedLength += buffer.length * 8;
 
@@ -761,8 +820,8 @@ export class BitstreamReader {
             let request = this.blockedRequest;
             this.blockedRequest = null;
 
-            if (request.peek) {
-                request.resolve(0);
+            if (request.assure) {
+                request.resolve(request.length);
             } else if (request.signed) {
                 request.resolve(this.readSignedSync(request.length));
             } else if (request.float) {
@@ -771,5 +830,48 @@ export class BitstreamReader {
                 request.resolve(this.readSync(request.length));
             }
         }
+    }
+
+    private _ended = false;
+    get ended() { return this._ended; }
+
+    reset() {
+        if (this.blockedRequest) {
+            throw new Error(`Cannot reset while there is a blocked request!`);
+        }
+
+        this.buffers = [];
+        this.bufferedLength = 0;
+        this.blockedRequest = null;
+        this._offsetIntoBuffer = 0;
+        this._bufferIndex = 0;
+        this._offset = 0;
+        this._spentBufferSize = 0;
+        this._ended = false;
+    }
+    /**
+     * Inform this reader that it will not receive any further buffers. Any requests to assure bits beyond the end of the 
+     * buffer will result ss
+     */
+    end() {
+        this._ended = true;
+
+        if (this.blockedRequest) {
+            let request = this.blockedRequest;
+            this.blockedRequest = null;
+
+            if (request.length <= this.available)
+                throw new Error(`Internal inconsistency in @/bitstream: Should have granted request prior. Please report this bug.`);
+
+            if (request.assure) {
+                request.resolve(this.available);
+            } else {
+                request.reject(this.endOfStreamError(request.length));
+            }
+        }
+    }
+
+    private endOfStreamError(length: number) {
+        return new Error(`End of stream reached while reading ${length} bits, only ${this.available} bits are left in the stream`)
     }
 }

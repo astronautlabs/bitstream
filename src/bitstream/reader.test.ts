@@ -646,6 +646,137 @@ describe('BitstreamReader', it => {
         await bitstream.readBytesBlocking(buf2);
         expect(Array.from(buf2)).to.eql([ 12, 42, 15 ]);
     });
+    it('.addBuffer() throws when called on an ended stream', async () => {
+        let bitstream = new BitstreamReader();
+        expect(() => bitstream.addBuffer(new Uint8Array(1))).not.to.throw;
+        bitstream.end();
+        expect(() => bitstream.addBuffer(new Uint8Array(1))).to.throw;
+    });
+    it('.simulate() restores offset after execution', async () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(new Uint8Array(2));
+        bitstream.readSync(4);
+
+        await bitstream.simulate(async () => {
+            bitstream.readSync(4);
+            expect(bitstream.offset).to.equal(8);
+        });
+
+        expect(bitstream.offset).to.equal(4);
+    });
+    it('.simulateSync() can be nested', async () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(new Uint8Array(8));
+        bitstream.readSync(4);
+
+        await bitstream.simulate(async () => {
+            bitstream.readSync(4);
+            expect(bitstream.offset).to.equal(8);
+            await bitstream.simulateSync(async () => {
+                bitstream.readSync(4);
+                expect(bitstream.offset).to.equal(12);
+            });
+            expect(bitstream.offset).to.equal(8);
+        });
+        expect(bitstream.offset).to.equal(4);
+    });
+    it('.simulateSync() restores offset after execution', async () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(new Uint8Array(2));
+        bitstream.readSync(4);
+
+        bitstream.simulateSync(() => {
+            bitstream.readSync(4);
+            expect(bitstream.offset).to.equal(8);
+        });
+
+        expect(bitstream.offset).to.equal(4);
+    });
+    it('.simulateSync() can be nested', async () => {
+        let bitstream = new BitstreamReader();
+
+        bitstream.addBuffer(new Uint8Array(8));
+        bitstream.readSync(4);
+
+        bitstream.simulateSync(() => {
+            bitstream.readSync(4);
+            expect(bitstream.offset).to.equal(8);
+            bitstream.simulateSync(() => {
+                bitstream.readSync(4);
+                expect(bitstream.offset).to.equal(12);
+            });
+            expect(bitstream.offset).to.equal(8);
+        });
+        expect(bitstream.offset).to.equal(4);
+    });
+    it('.end() markes stream as ended', async () => {
+        let bitstream = new BitstreamReader();
+        expect(bitstream.ended).to.be.false;
+        bitstream.end();
+        expect (bitstream.ended).to.be.true;
+    });
+    it('.end() causes pending assure() to reject', async () => {
+        let bitstream = new BitstreamReader();
+        let thrown = bitstream.assure(8).then(() => false).catch(() => true);
+        bitstream.end();
+        expect (await thrown).to.be.true;
+    });
+    it('.end() causes pending read() to reject', async () => {
+        let bitstream = new BitstreamReader();
+        let thrown = bitstream.read(8).then(() => false).catch(() => true);
+        bitstream.end();
+        expect (await thrown).to.be.true;
+    });
+    it('.end() does not cause a pending optional assure() to reject', async () => {
+        let bitstream = new BitstreamReader();
+        let thrown = bitstream.assure(8, true).then(() => false).catch(() => true);
+        bitstream.end();
+        expect (await thrown).to.be.false;
+    });
+    it('.reset() throws if there is a pending operation', async () => {
+        let bitstream = new BitstreamReader();
+        let thrown = bitstream.assure(8, true).then(() => false).catch(() => true);
+        expect(() => bitstream.reset()).to.throw;
+    });
+    it('.reset() does not throw if there is no pending operation', async () => {
+        let bitstream = new BitstreamReader();
+        expect(() => bitstream.reset()).not.to.throw;
+    });
+    it('.reset() unmarks a stream as ended', async () => {
+        let bitstream = new BitstreamReader();
+        expect(() => bitstream.addBuffer(new Uint8Array(1))).not.to.throw;
+        bitstream.end();
+        expect(bitstream.ended).to.be.true;
+        expect(() => bitstream.addBuffer(new Uint8Array(1))).to.throw;
+        bitstream.reset();
+        expect(bitstream.ended).to.be.false;
+        expect(() => bitstream.addBuffer(new Uint8Array(1))).not.to.throw;
+    });
+    it('.reset() clears buffers and resets read head to zero', async () => {
+        let bitstream = new BitstreamReader();
+        bitstream.addBuffer(new Uint8Array(1));
+        bitstream.addBuffer(new Uint8Array(1));
+        bitstream.addBuffer(new Uint8Array(1));
+
+        // --
+
+        bitstream.retainBuffers = true;
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex).to.equal(1);
+        bitstream.readSync(8);
+        expect(bitstream.bufferIndex).to.equal(2);
+        expect(bitstream.offset).to.equal(16);
+        expect(bitstream.available).to.equal(8);
+        
+        bitstream.reset();
+
+        expect(bitstream.bufferIndex).to.equal(0);
+        expect(bitstream.offset).to.equal(0);
+        expect(bitstream.available).to.equal(0);
+    });
 });
 
 describe('BitstreamReader (generated)', it => {

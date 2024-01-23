@@ -1,3 +1,27 @@
+# vNext
+
+- The `BitstreamRequest` interface, which is used internally to track pending reads, is no longer exported. This 
+  interface previously had no use for consumers of the library and was exported accidentally, so this is not 
+  considered a breaking change.
+- `BitstreamReader` now supports the concept of ending the stream using `end()`. When a reader ends, a blocking read is 
+  rejected.  
+- `BitstreamReader.assure()` now rejects if the stream ends before the requested number of bits is satisfied. Previously,
+  since there was no way to end a stream, it would remain unresolved forever, until a buffer satisfied it. Pass 
+  `true` as the `optional` parameter to have the returned promise resolve even if not all bits could be read. You can 
+  pair this with reading `available` directly to check if all requested bits have been read.
+- `BitstreamReader.addBuffer()` throws if called on an ended reader
+- `BitstreamReader.reset()` has been added to reset a reader to a clean state, including causing the reader's ended 
+  flag to get reset.
+- `BitstreamReader.simulate()` and `BitstreamReader.simulateSync()` have been added to provide a convenient way to 
+  run a function and reset the read head of the reader back to where it was before the function was called. This is 
+  equivalent to enabling the `retainBuffers` setting, noting the offset before executing the function, and setting 
+  the offset back to where it was before the simulation.
+- Added read ahead capability to `BitstreamElement`. See the `readAhead` field options for more information. 
+- Made discriminant types more specific. Previously a single `Discriminant` type was used for both variant discriminants 
+  and field presence discriminants, but the `parent` parameter was never passed to field presence discriminants. Now 
+  these are represented with their own distinct types (`VariantDiscriminant` and `FieldPresenceDiscriminant` 
+  respectively).
+
 # v4.1.3
 - Performance: Substantial optimizations around byte-aligned reads, partial byte-aligned reads, byte array reads, and
   other scenarios. In some scenarios, performance can be 10x faster, and in the case of reading byte-aligned byte arrays, 

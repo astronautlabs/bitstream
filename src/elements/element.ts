@@ -616,7 +616,7 @@ export class BitstreamElement {
         return str;
     }
 
-    private isPresent(element : FieldDefinition, instance : this) {
+    private isPresent(element : FieldDefinition, instance : this, reader?: BitstreamReader) {
         if (element.options.presentWhen) {
             if (!instance.runWithFieldBeingComputed(element, () => element.options.presentWhen(instance))) {
                 return false;
@@ -626,6 +626,21 @@ export class BitstreamElement {
         if (element.options.excludedWhen) {
             if (instance.runWithFieldBeingComputed(element, () => element.options.excludedWhen(instance))) {
                 return false;
+            }
+        }
+
+        // Perform readahead checks. It is expected that the caller has already read the requisite number of bits 
+        // ahead to allow the checks to occur.
+
+        if (reader) {
+            if (element.options.readAhead?.presentWhen) {
+                if (!reader.simulateSync(() => element.options.readAhead.presentWhen(reader, element)))
+                    return false;
+            }
+
+            if (element.options.readAhead?.excludedWhen) {
+                if (reader.simulateSync(() => element.options.readAhead.excludedWhen(reader, element)))
+                    return false;
             }
         }
 
@@ -681,7 +696,25 @@ export class BitstreamElement {
 
                 // Preconditions 
 
-                if (!this.isPresent(element, instance))
+                if (element.options.readAhead) {
+                    let length = 0;
+                    
+                    if (typeof element.options.readAhead.length === 'number') {
+                        length = element.options.readAhead.length;
+                    } else if (typeof element.options.readAhead.length === 'function') {
+                        length = element.options.readAhead.length(instance, element);
+                    }
+
+                    if (bitstream.available < length) {
+                        yield {
+                            remaining: length - bitstream.available,
+                            contextHint: () => `[readAhead ${length} bits]`,
+                            optional: true
+                        }
+                    }
+                }
+
+                if (!this.isPresent(element, instance, bitstream))
                     continue;
                     
                 if (options?.skip && options.skip.includes(element.name))
@@ -703,7 +736,8 @@ export class BitstreamElement {
                             let incompleteResult = result.value;
                             yield { 
                                 remaining: incompleteResult.remaining,
-                                contextHint: () => this.summarizeElementField(element, incompleteResult.contextHint())
+                                contextHint: () => this.summarizeElementField(element, incompleteResult.contextHint()),
+                                optional: incompleteResult.optional
                             };
                         } else {
                             instance = result.value;
@@ -736,7 +770,8 @@ export class BitstreamElement {
                             let incompleteResult = result.value;
                             yield { 
                                 remaining: incompleteResult.remaining, 
-                                contextHint: () => this.summarizeElementField(element, incompleteResult.contextHint()) 
+                                contextHint: () => this.summarizeElementField(element, incompleteResult.contextHint()),
+                                optional: incompleteResult.optional,
                             };
                         } else {
                             readValue = result.value;
@@ -886,9 +921,10 @@ export class BitstreamElement {
             let result = g.next();
             if (result.done === false) {
                 let incompleteResult = result.value;
-                yield { 
+                yield <IncompleteReadResult>{ 
                     remaining: incompleteResult.remaining, 
-                    contextHint: () => this.summarizeElementOperation(`read()`, incompleteResult.contextHint())
+                    contextHint: () => this.summarizeElementOperation(`read()`, incompleteResult.contextHint()),
+                    optional: incompleteResult.optional,
                 };
             } else {
                 return result.value;
@@ -917,7 +953,8 @@ export class BitstreamElement {
                 let incompleteResult = result.value;
                 yield { 
                     remaining: incompleteResult.remaining, 
-                    contextHint: () => this.summarizeElementOperation(`readOwn()`, incompleteResult.contextHint()) 
+                    contextHint: () => this.summarizeElementOperation(`readOwn()`, incompleteResult.contextHint()),
+                    optional: incompleteResult.optional
                 };
             } else {
                 return result.value;
@@ -951,7 +988,8 @@ export class BitstreamElement {
                     let incompleteResult = result.value;
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => this.summarizeElementOperation(`variate()`, incompleteResult.contextHint()) 
+                        contextHint: () => this.summarizeElementOperation(`variate()`, incompleteResult.contextHint()),
+                        optional: incompleteResult.optional
                     };
                 } else {
                     return <this> result.value;
@@ -979,7 +1017,7 @@ export class BitstreamElement {
         do {
             let result = iterator.next();
             if (result.done === false) {
-                await reader.assure(result.value.remaining);
+                await reader.assure(result.value.remaining, result.value.optional);
                 continue;
             }
     
@@ -1046,13 +1084,17 @@ export class BitstreamElement {
      * @returns 
      */
     static readSync<T extends typeof BitstreamElement>(this : T, reader : BitstreamReader, options : StaticReadOptions = {}): InstanceType<T> {
-
-        let generator = this.read(reader, options);
-        let result = generator.next();
-
-        if (result.done === false)
-            throw new Error(`Not enough bits: Reached end of buffer while trying to read ${result.value.remaining} bits! Context: ${result.value.contextHint()}`);
-        return result.value;
+        let iterator = <Generator<IncompleteReadResult, InstanceType<T>>> this.read(reader, options);
+        do {
+            let result = iterator.next();
+            if (result.done === false) {
+                if (reader.ended && result.value.optional)
+                    continue;
+                throw new Error(`Not enough bits: Reached end of buffer while trying to read ${result.value.remaining} bits! Context: ${result.value.contextHint()}`);
+            }
+    
+            return result.value;
+        } while (true);
     }
 
     /**
@@ -1159,7 +1201,8 @@ export class BitstreamElement {
 
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => element.summarizeElementOperation(`${this.name}.readVariant()`, incompleteResult.contextHint()) 
+                        contextHint: () => element.summarizeElementOperation(`${this.name}.readVariant()`, incompleteResult.contextHint()),
+                        optional: incompleteResult.optional
                     };
                 } else {
                     element = result.value;
@@ -1177,7 +1220,8 @@ export class BitstreamElement {
                     let incompleteResult = result.value;
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => element.summarizeElementOperation(`${this.name}.read()`, incompleteResult.contextHint()) 
+                        contextHint: () => element.summarizeElementOperation(`${this.name}.read()`, incompleteResult.contextHint()),
+                        optional: incompleteResult.optional
                     };
                 } else {
                     element = result.value;
@@ -1201,7 +1245,8 @@ export class BitstreamElement {
                     let incompleteResult = result.value;
                     yield { 
                         remaining: incompleteResult.remaining, 
-                        contextHint: () => element.summarizeElementOperation(`tail-variation`, incompleteResult.contextHint()) 
+                        contextHint: () => element.summarizeElementOperation(`tail-variation`, incompleteResult.contextHint()),
+                        optional: incompleteResult.optional
                     };
                 } else {
                     element = result.value;

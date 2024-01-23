@@ -1,5 +1,7 @@
-import { Constructor, Discriminant } from "../common";
+import { Constructor } from "../common";
 import { VariantOptions } from "./variant-options";
+
+export type VariantDiscriminant<T = any, U = any> = (element : T, parent? : U) => boolean;
 
 /**
  * Defines the structure of a Variant subclass of a BitstreamElement superclass.
@@ -9,6 +11,6 @@ import { VariantOptions } from "./variant-options";
  */
  export interface VariantDefinition {
     type : Constructor;
-    discriminant : Discriminant;
+    discriminant : VariantDiscriminant;
     options : VariantOptions;
 }

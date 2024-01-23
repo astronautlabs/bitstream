@@ -1,12 +1,56 @@
-import { StringEncodingOptions } from "../bitstream";
+import { BitstreamReader, StringEncodingOptions } from "../bitstream";
 import { ArrayOptions } from "./array-options";
 import { BufferOptions } from "./buffer-options";
-import { Discriminant } from "../common";
 import { Serializer } from "./serializer";
 import { ValueDeterminant } from "./value-determinant";
 import { VariantDefinition } from "./variant-definition";
 import { NumberOptions } from "./number-options";
 import { BooleanOptions } from "./boolean-options";
+import { LengthDeterminant } from "./length-determinant";
+
+export type ReadAheadDiscriminant<T = any, U = any> = (buffer: BitstreamReader, element : T) => boolean;
+
+export interface ReadAheadOptions {
+    /**
+     * How many bits should be read before processing this field.
+     */
+    length: LengthDeterminant;
+
+    /**
+     * When specified, if the given discriminant returns true, the field is parsed. Otherwise it is skipped.
+     * 
+     * Called after the required number of bits have been read ahead (see `length`), as long as the bitstream has 
+     * not ended.
+     * 
+     * The bitstream reader is placed in simulation mode before calling the discriminant, so it is fine to use 
+     * the read*Sync() functions to inspect the peeked data. The state of the stream's read head will be restored to 
+     * where it was after the function completes. 
+     * 
+     * In the case where the stream ended before the requisite number of bits became available, this discriminant is 
+     * still called. It is expected that the discriminant will take care in this situation.
+     */
+    presentWhen?: ReadAheadDiscriminant;
+
+    /**
+     * When specified, if the given discriminant returns true, the field is skipped. Otherwise it is parsed.
+     * 
+     * Called after the required number of bits have been read ahead (see `length`), as long as the bitstream has 
+     * not ended.
+     * 
+     * The bitstream reader is placed in simulation mode before calling the discriminant, so it is fine to use 
+     * the read*Sync() functions to inspect the peeked data. The state of the stream's read head will be restored to 
+     * where it was after the function completes. 
+     * 
+     * In the case where the stream ended before the requisite number of bits became available, this discriminant is 
+     * still called. It is expected that the discriminant will take care in this situation.
+     */
+    excludedWhen?: ReadAheadDiscriminant;
+}
+
+/**
+ * A function which returns true when the given element matches a certain condition
+ */
+export type PresenceDiscriminant<T = any> = (element : T) => boolean;
 
 /**
  * Defines options available for properties marked with `@Field()` within BitstreamElement classes.
@@ -54,16 +98,22 @@ export interface FieldOptions {
     group? : string;
 
     /**
+     * Allows for reading a certain number of bits from the bitstream ahead of attempting to read this field.
+     * This can be used to make parsing decisions on upcoming data.
+     */
+    readAhead?: ReadAheadOptions;
+
+    /**
      * Define a function that indicates when the field is present within the bitstream. This is the opposite
      * of `excludedWhen`.
      */
-    presentWhen? : Discriminant;
+    presentWhen? : PresenceDiscriminant;
 
     /**
      * Define a function that indicates when the field is absent within the bitstream. This is the opposite 
      * of `presentWhen`.
      */
-    excludedWhen? : Discriminant;
+    excludedWhen? : PresenceDiscriminant;
 
     /**
      * Specify a set of subclasses which should be considered when variating this field. When not specified,

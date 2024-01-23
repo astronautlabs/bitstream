@@ -1,4 +1,3 @@
-import { Discriminant } from "../common";
 import { LengthDeterminant } from "./length-determinant";
 
 export type HasMore<ArrayT = any, InstanceT = any, ParentT = any> = (array : ArrayT, element : InstanceT, parent? : ParentT) => boolean;

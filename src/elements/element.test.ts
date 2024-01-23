@@ -115,6 +115,167 @@ describe('BitstreamElement', it => {
         });
     });
 
+    it('can read ahead and make field presence decisions based on what\'s upcoming', () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte1 : number;
+            @Field(8, {
+                readAhead: {
+                    length: 8,
+                    presentWhen: reader => reader.readSync(8) === 111
+                }
+            }) 
+            lucky : number;
+            @Field(8) byte3 : number;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 123, 111, 124 ]));
+
+        let result = CustomElement.readSync(reader);
+
+        expect(result.byte1).to.equal(123);
+        expect(result.lucky).to.equal(111);
+        expect(result.byte3).to.equal(124);
+
+        reader.addBuffer(Buffer.from([ 123, 124 ]));
+        result = CustomElement.readSync(reader);
+        expect(result.byte1).to.equal(123);
+        expect(result.lucky).to.be.undefined;
+        expect(result.byte3).to.equal(124);
+    });
+
+    it('can read ahead and make field exclusion decisions based on what\'s upcoming', () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte1 : number;
+            @Field(8, {
+                readAhead: {
+                    length: 8,
+                    excludedWhen: reader => reader.readSync(8) !== 111
+                }
+            }) 
+            lucky : number;
+            @Field(8) byte3 : number;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 123, 111, 124 ]));
+
+        let result = CustomElement.readSync(reader);
+
+        expect(result.byte1).to.equal(123);
+        expect(result.lucky).to.equal(111);
+        expect(result.byte3).to.equal(124);
+        
+        reader.addBuffer(Buffer.from([ 123, 124 ]));
+        result = CustomElement.readSync(reader);
+        expect(result.byte1).to.equal(123);
+        expect(result.lucky).to.be.undefined;
+        expect(result.byte3).to.equal(124);
+    });
+
+    it('end of stream does not cause read-ahead to fail', () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte1 : number;
+            @Field(8, {
+                readAhead: {
+                    length: 8,
+                    presentWhen: reader => reader.available >= 8
+                }
+            }) 
+            lucky : number;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 1, 2 ]));
+        
+        let result = CustomElement.readSync(reader);
+        expect(result.byte1).to.equal(1);
+        expect(result.lucky).to.equal(2);
+
+        reader.addBuffer(Buffer.from([ 1 ]));
+        reader.end();
+
+        result = CustomElement.readSync(reader);
+        expect(result.byte1).to.equal(1);
+        expect(result.lucky).to.be.undefined;
+    });
+    it('blind read-ahead when faced with end of stream throws', () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte1 : number;
+            @Field(8, {
+                readAhead: {
+                    length: 8,
+                    presentWhen: reader => reader.readSync(8) === 2
+                }
+            }) 
+            lucky : number;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 1, 2 ]));
+        
+        let result = CustomElement.readSync(reader);
+        expect(result.byte1).to.equal(1);
+        expect(result.lucky).to.equal(2);
+
+        reader.addBuffer(Buffer.from([ 1 ]));
+        reader.end();
+
+        expect(() => CustomElement.readSync(reader)).to.throw;
+    });
+    
+    it('(async) end of stream does not cause read-ahead to fail', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte1 : number;
+            @Field(8, {
+                readAhead: {
+                    length: 8,
+                    presentWhen: reader => reader.available >= 8
+                }
+            }) 
+            lucky : number;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 1, 2 ]));
+        
+        let result = await CustomElement.readBlocking(reader);
+        expect(result.byte1).to.equal(1);
+        expect(result.lucky).to.equal(2);
+
+        reader.addBuffer(Buffer.from([ 1 ]));
+        reader.end();
+
+        result = await CustomElement.readBlocking(reader);
+        expect(result.byte1).to.equal(1);
+        expect(result.lucky).to.be.undefined;
+    });
+    it('(async) blind read-ahead when faced with end of stream throws', async () => {
+        class CustomElement extends BitstreamElement {
+            @Field(8) byte1 : number;
+            @Field(8, {
+                readAhead: {
+                    length: 8,
+                    presentWhen: reader => reader.readSync(8) === 2
+                }
+            }) 
+            lucky : number;
+        }
+
+        let reader = new BitstreamReader();
+        reader.addBuffer(Buffer.from([ 1, 2 ]));
+        
+        let result = await CustomElement.readBlocking(reader);
+        expect(result.byte1).to.equal(1);
+        expect(result.lucky).to.equal(2);
+
+        reader.addBuffer(Buffer.from([ 1 ]));
+        reader.end();
+
+        let thrown = await CustomElement.readBlocking(reader).then(() => false).catch(() => true);
+
+        expect(thrown).to.be.true;
+    });
     describe(': Inheritance', it => {
         it('ownSyntax should be an empty array on a child element with no syntax of its own', () => {
             class CustomElement extends BitstreamElement { @Field(8) byte; }
