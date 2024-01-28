@@ -130,7 +130,7 @@ describe('BitstreamElement', it => {
         expect((result as any).byte2).to.equal(124);
     });
 
-    it.only('@Reserved() avoids reused name mistakes', () => {
+    it('@Reserved() avoids reused name mistakes', () => {
         class A extends BitstreamElement {
             @Reserved(8) reserved: number;
             @Field(8) field1: number;
