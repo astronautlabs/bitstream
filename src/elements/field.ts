@@ -81,7 +81,7 @@ export function Field<T extends BitstreamElement, K extends keyof T>(...args: an
         }
 
         if (field.type === Number) {
-            if (typeof field.length === 'number' && field.length > 53 && !field.options.number?.allowOversized) {
+            if (typeof field.length === 'number' && field.length > 53 && field.options.number?.format !== 'float' && !field.options.number?.allowOversized) {
                 throw new Error(
                     `${fieldDesc}: It is not safe to use the 'number' type for fields larger than 53 bits. `
                     + `Consider using 'bigint' instead. `

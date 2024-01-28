@@ -1,5 +1,9 @@
 # ⏩ vNext
 
+# v4.2.2
+- Fix an issue where the new 53-bit oversize error is emitted when the `float` format is selected, even though it is 
+  valid and safe to use size `64` for a float.
+
 # v4.2.1
 - Add inference based type safety in more places. 
 - It is no longer necessary to specify a length determinant if the length is inferred (such as when declaring
